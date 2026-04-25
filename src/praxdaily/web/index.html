@@ -2,78 +2,319 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>praxdaily — local web panel</title>
+  <title>praxdaily — local panel</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.jsdelivr.net/npm/vue@3.4.27/dist/vue.global.prod.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-50 text-gray-900">
-  <div id="app" class="max-w-3xl mx-auto p-8">
-    <header class="mb-8">
+  <div id="app" class="max-w-3xl mx-auto p-8 space-y-8">
+    <header>
       <h1 class="text-3xl font-bold">praxdaily</h1>
-      <p class="text-gray-500 mt-1">
-        Local web panel for Prax's ai-news-daily flagship workflow.
-      </p>
+      <p class="text-gray-500 mt-1">本地 AI 信息助理面板。</p>
     </header>
 
+    <!-- ── Health ───────────────────────────────────────────── -->
     <section class="bg-white rounded-lg shadow-sm border p-6">
-      <h2 class="text-lg font-semibold mb-4">Health</h2>
-      <div v-if="loading" class="text-gray-400">checking…</div>
-      <div v-else-if="error" class="text-red-600">
-        <strong>error:</strong> {{ error }}
+      <h2 class="text-lg font-semibold mb-4">运行状态</h2>
+      <div v-if="health.loading" class="text-gray-400">检查中…</div>
+      <div v-else-if="health.error" class="text-red-600">
+        <strong>error:</strong> {{ health.error }}
       </div>
       <dl v-else class="grid grid-cols-3 gap-y-2 text-sm">
         <dt class="text-gray-500">praxdaily</dt>
-        <dd class="col-span-2 font-mono">{{ data.praxdaily_version }}</dd>
+        <dd class="col-span-2 font-mono">{{ health.data.praxdaily_version }}</dd>
 
         <dt class="text-gray-500">cwd</dt>
-        <dd class="col-span-2 font-mono break-all">{{ data.cwd }}</dd>
+        <dd class="col-span-2 font-mono break-all">{{ health.data.cwd }}</dd>
 
         <dt class="text-gray-500">.prax/ exists</dt>
-        <dd class="col-span-2 font-mono">{{ data.prax_dir_exists ? 'yes' : 'no' }}</dd>
+        <dd class="col-span-2 font-mono">{{ health.data.prax_dir_exists ? 'yes' : 'no' }}</dd>
 
         <dt class="text-gray-500">prax CLI</dt>
         <dd class="col-span-2 font-mono">
-          <span v-if="data.prax_on_path">
-            {{ data.prax_version || data.prax_on_path }}
+          <span v-if="health.data.prax_on_path">
+            {{ health.data.prax_version || health.data.prax_on_path }}
           </span>
           <span v-else class="text-red-600">
-            not found — run <code class="bg-gray-100 px-1 rounded">npm install -g praxagent</code>
+            未安装 — 跑 <code class="bg-gray-100 px-1 rounded">npm install -g praxagent</code>
           </span>
         </dd>
       </dl>
     </section>
 
-    <p class="mt-8 text-xs text-gray-400">
-      0.1.0 milestone: this is the scaffolding. The five real screens
-      (sources / schedule / channels / runs / setup) land in 0.2.x as the
-      API contract gets implemented.
+    <!-- ── WeChat accounts (read-only) ──────────────────────── -->
+    <section class="bg-white rounded-lg shadow-sm border p-6">
+      <h2 class="text-lg font-semibold mb-2">个人微信账号</h2>
+      <p class="text-sm text-gray-500 mb-4">
+        通过 <code class="bg-gray-100 px-1 rounded">prax wechat login</code>
+        登录的 iLink 账号。新增渠道时下方下拉框会自动填充。
+      </p>
+      <div v-if="wechat.loading" class="text-gray-400 text-sm">加载…</div>
+      <div v-else-if="wechat.accounts.length === 0" class="text-sm text-gray-500">
+        没有已登录账号。先在终端跑：<br />
+        <code class="bg-gray-100 px-1 rounded mt-1 inline-block">prax wechat login</code>
+      </div>
+      <ul v-else class="text-sm space-y-1">
+        <li v-for="a in wechat.accounts" :key="a.account_id" class="font-mono">
+          <span class="text-gray-700">{{ a.account_id }}</span>
+          <span class="text-gray-400 ml-2">user_id={{ a.user_id || '(none)' }}</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ── Channels CRUD ────────────────────────────────────── -->
+    <section class="bg-white rounded-lg shadow-sm border p-6">
+      <div class="flex justify-between items-start mb-4">
+        <div>
+          <h2 class="text-lg font-semibold">通知渠道</h2>
+          <p class="text-sm text-gray-500 mt-1">
+            渠道写在
+            <code class="bg-gray-100 px-1 rounded">.prax/notify.yaml</code>。
+            cron 任务用渠道名引用，到期自动推。
+          </p>
+        </div>
+        <button
+          @click="showAddForm = !showAddForm"
+          class="bg-gray-900 text-white text-sm px-3 py-2 rounded hover:bg-gray-700"
+        >
+          {{ showAddForm ? '取消' : '+ 新增渠道' }}
+        </button>
+      </div>
+
+      <!-- Add channel form -->
+      <div v-if="showAddForm" class="mb-6 bg-gray-50 border rounded p-4 space-y-3">
+        <div class="grid grid-cols-3 gap-2">
+          <label class="text-sm text-gray-600 col-span-1 self-center">渠道名</label>
+          <input v-model="form.name" placeholder="my-wechat" class="col-span-2 border rounded px-2 py-1 text-sm font-mono" />
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <label class="text-sm text-gray-600 col-span-1 self-center">Provider</label>
+          <select v-model="form.provider" class="col-span-2 border rounded px-2 py-1 text-sm">
+            <option value="wechat_personal">wechat_personal (个人微信)</option>
+            <option value="wechat_work_webhook">wechat_work_webhook (企业微信群机器人)</option>
+            <option value="feishu_webhook">feishu_webhook (飞书)</option>
+            <option value="lark_webhook">lark_webhook (Lark)</option>
+          </select>
+        </div>
+
+        <!-- wechat_personal extras -->
+        <template v-if="form.provider === 'wechat_personal'">
+          <div class="grid grid-cols-3 gap-2">
+            <label class="text-sm text-gray-600 col-span-1 self-center">account_id</label>
+            <select v-model="form.account_id" class="col-span-2 border rounded px-2 py-1 text-sm font-mono">
+              <option value="">— 选一个已登录账号 —</option>
+              <option v-for="a in wechat.accounts" :key="a.account_id" :value="a.account_id">{{ a.account_id }}</option>
+            </select>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <label class="text-sm text-gray-600 col-span-1 self-center">to</label>
+            <input v-model="form.to" placeholder="self" class="col-span-2 border rounded px-2 py-1 text-sm font-mono" />
+          </div>
+        </template>
+
+        <!-- webhook extras -->
+        <template v-if="form.provider !== 'wechat_personal'">
+          <div class="grid grid-cols-3 gap-2">
+            <label class="text-sm text-gray-600 col-span-1 self-center">webhook URL</label>
+            <input v-model="form.url" placeholder="https://… 或 ${ENV_VAR}" class="col-span-2 border rounded px-2 py-1 text-sm font-mono" />
+          </div>
+        </template>
+
+        <div class="grid grid-cols-3 gap-2">
+          <label class="text-sm text-gray-600 col-span-1 self-center">title 前缀（可选）</label>
+          <input v-model="form.default_title_prefix" placeholder="[Prax] " class="col-span-2 border rounded px-2 py-1 text-sm font-mono" />
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button @click="resetForm" class="text-sm text-gray-600 px-3 py-1">清空</button>
+          <button
+            @click="saveChannel"
+            :disabled="!form.name || !form.provider"
+            class="bg-blue-600 text-white text-sm px-4 py-1 rounded disabled:opacity-50 hover:bg-blue-700"
+          >保存</button>
+        </div>
+        <div v-if="saveError" class="text-red-600 text-sm">{{ saveError }}</div>
+      </div>
+
+      <!-- Channels list -->
+      <div v-if="channels.loading" class="text-gray-400 text-sm">加载…</div>
+      <div v-else-if="channels.list.length === 0" class="text-sm text-gray-500">
+        没有渠道。点上方"新增渠道"添加第一个。
+      </div>
+      <table v-else class="w-full text-sm">
+        <thead>
+          <tr class="border-b text-left text-gray-500">
+            <th class="py-2">name</th>
+            <th>provider</th>
+            <th>config</th>
+            <th class="text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="ch in channels.list" :key="ch.name" class="border-b last:border-0">
+            <td class="py-2 font-mono">{{ ch.name }}</td>
+            <td class="text-xs text-gray-600">{{ ch.provider }}</td>
+            <td class="text-xs text-gray-500 font-mono">
+              <span v-if="ch.account_id">account={{ ch.account_id.slice(0, 18) }}…</span>
+              <span v-if="ch.url">url={{ truncate(ch.url, 32) }}</span>
+              <span v-if="ch.to" class="ml-2">to={{ ch.to }}</span>
+            </td>
+            <td class="text-right space-x-2">
+              <button
+                @click="testSend(ch.name)"
+                :disabled="testing === ch.name"
+                class="text-xs text-blue-600 hover:underline disabled:opacity-50"
+              >{{ testing === ch.name ? '发送中…' : '测发' }}</button>
+              <button
+                @click="deleteChannel(ch.name)"
+                class="text-xs text-red-600 hover:underline"
+              >删除</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div v-if="testResult" class="mt-3 text-sm" :class="testResult.ok ? 'text-green-600' : 'text-red-600'">
+        {{ testResult.message }}
+      </div>
+    </section>
+
+    <p class="text-xs text-gray-400 text-center pt-4">
+      praxdaily 0.2.0 · Schedule / Sources / Runs 屏即将到来
     </p>
   </div>
 
   <script>
-    const { createApp, ref, onMounted } = Vue;
+    const { createApp, reactive, ref, onMounted } = Vue;
 
     createApp({
       setup() {
-        const loading = ref(true);
-        const error = ref("");
-        const data = ref({});
+        const health = reactive({ loading: true, error: "", data: {} });
+        const wechat = reactive({ loading: true, accounts: [] });
+        const channels = reactive({ loading: true, list: [] });
+        const showAddForm = ref(false);
+        const form = reactive({
+          name: "", provider: "wechat_personal",
+          account_id: "", to: "self", url: "",
+          default_title_prefix: "",
+        });
+        const saveError = ref("");
+        const testing = ref(null);
+        const testResult = ref(null);
+
+        const truncate = (s, n) => (s && s.length > n ? s.slice(0, n) + "…" : s || "");
 
         const fetchHealth = async () => {
           try {
-            const resp = await fetch("/api/health");
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            data.value = await resp.json();
+            const r = await fetch("/api/health");
+            health.data = await r.json();
           } catch (e) {
-            error.value = e.message || String(e);
+            health.error = e.message || String(e);
           } finally {
-            loading.value = false;
+            health.loading = false;
           }
         };
 
-        onMounted(fetchHealth);
-        return { loading, error, data };
+        const fetchWechatAccounts = async () => {
+          try {
+            const r = await fetch("/api/wechat/accounts");
+            const d = await r.json();
+            wechat.accounts = d.accounts || [];
+          } catch (e) {
+            // non-fatal — just show empty
+          } finally {
+            wechat.loading = false;
+          }
+        };
+
+        const fetchChannels = async () => {
+          channels.loading = true;
+          try {
+            const r = await fetch("/api/channels");
+            const d = await r.json();
+            channels.list = d.channels || [];
+          } finally {
+            channels.loading = false;
+          }
+        };
+
+        const resetForm = () => {
+          form.name = "";
+          form.account_id = "";
+          form.to = "self";
+          form.url = "";
+          form.default_title_prefix = "";
+          saveError.value = "";
+        };
+
+        const saveChannel = async () => {
+          saveError.value = "";
+          const body = { provider: form.provider };
+          if (form.provider === "wechat_personal") {
+            if (!form.account_id) { saveError.value = "请先选 account_id"; return; }
+            body.account_id = form.account_id;
+            if (form.to) body.to = form.to;
+          } else {
+            if (!form.url) { saveError.value = "请填 webhook URL"; return; }
+            body.url = form.url;
+          }
+          if (form.default_title_prefix) body.default_title_prefix = form.default_title_prefix;
+
+          try {
+            const r = await fetch(`/api/channels/${encodeURIComponent(form.name)}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+            if (!r.ok) {
+              const err = await r.json();
+              saveError.value = err.detail || `HTTP ${r.status}`;
+              return;
+            }
+            resetForm();
+            showAddForm.value = false;
+            await fetchChannels();
+          } catch (e) {
+            saveError.value = e.message;
+          }
+        };
+
+        const deleteChannel = async (name) => {
+          if (!confirm(`删除渠道 "${name}"?`)) return;
+          await fetch(`/api/channels/${encodeURIComponent(name)}`, { method: "DELETE" });
+          await fetchChannels();
+        };
+
+        const testSend = async (name) => {
+          testing.value = name;
+          testResult.value = null;
+          try {
+            const r = await fetch(`/api/channels/${encodeURIComponent(name)}/test`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({}),
+            });
+            const d = await r.json();
+            testResult.value = r.ok
+              ? { ok: true, message: `✓ 测试已发到 "${name}"` }
+              : { ok: false, message: `✗ 测发失败 [${name}]: ${d.detail || r.statusText}` };
+          } catch (e) {
+            testResult.value = { ok: false, message: `✗ ${e.message}` };
+          } finally {
+            testing.value = null;
+          }
+        };
+
+        onMounted(async () => {
+          await Promise.all([fetchHealth(), fetchWechatAccounts(), fetchChannels()]);
+        });
+
+        return {
+          health, wechat, channels,
+          showAddForm, form, saveError,
+          testing, testResult,
+          truncate, resetForm, saveChannel, deleteChannel, testSend,
+        };
       },
     }).mount("#app");
   </script>

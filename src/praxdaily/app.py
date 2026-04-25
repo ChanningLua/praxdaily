@@ -29,6 +29,12 @@ def create_app(cwd: Path) -> FastAPI:
         version=__version__,
         description="Local web panel for Prax's ai-news-daily flagship workflow.",
     )
+    app.state.cwd = cwd
+
+    # Mount API route modules.
+    from .routes import channels_router, wechat_router
+    app.include_router(channels_router)
+    app.include_router(wechat_router)
 
     @app.get("/api/health")
     async def health() -> JSONResponse:
