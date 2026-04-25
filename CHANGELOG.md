@@ -5,6 +5,35 @@ All notable changes to praxdaily will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-04-25
+
+### Polish (5 visual micro-improvements, no functional change)
+- **Card hover lift** — glass cards now translate up 2px with stronger
+  shadow on hover, mirroring openclaw-manager's `.edict-card:hover`.
+  Applied to all four KPI cards via the new `.glass-hover` class.
+- **KPI icons** — each top-strip card now leads with a colour-tinted
+  rounded square holding a 16px lucide icon (terminal / chat / mail /
+  clock). Visual anchor + faster scanning.
+- **Empty states with icon + CTA** — replaces "还没有 X" plain text in
+  4 places (no WeChat accounts / no channels / no cron jobs / no
+  runs). 40px outline icon at 30% opacity, two-line title + hint, CTA
+  noun is highlighted in accent blue. Runs-empty state's CTA word is
+  click-to-jump to the cron tab.
+- **Tab switch fade-in** — every section now plays a 0.22s
+  fade-up-from-8px animation when its tab becomes active
+  (`@keyframes tabIn`). Implemented as a CSS class triggered by Vue's
+  v-if remount, so it plays exactly once per switch.
+- **Custom scrollbar + focus ring** — scrollbar thumb is a translucent
+  blue pill (`rgba(140,180,230,0.18)`) instead of the default OS grey;
+  keyboard `:focus-visible` on buttons gets a 2px accent outline with
+  2px offset for accessibility without touching mouse-click visuals.
+
+### Notes
+- All 42 unit tests still pass — pure presentation-layer change.
+- Tracked the recent fad of "skeleton loaders" but didn't add them:
+  the API endpoints respond in single-digit ms, so the existing "加载…"
+  text disappears before a skeleton would even paint.
+
 ## [0.6.0] - 2026-04-25
 
 ### Changed (UI overhaul — 借鉴 openclaw-manager 设计语言)

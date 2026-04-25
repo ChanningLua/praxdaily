@@ -62,7 +62,35 @@
       border: 1px solid var(--border);
       border-radius: var(--radius-lg);
       box-shadow: 0 18px 60px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset;
+      transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
     }
+    .glass-hover:hover {
+      border-color: var(--border-hover);
+      transform: translateY(-2px);
+      box-shadow: 0 24px 70px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.06) inset;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 32px 16px;
+      color: var(--muted);
+    }
+    .empty-state svg {
+      width: 40px; height: 40px;
+      margin: 0 auto 12px;
+      opacity: 0.3;
+      stroke-width: 1.2;
+    }
+    .empty-state .empty-title { font-size: 14px; color: var(--ink); opacity: 0.8; margin-bottom: 4px; }
+    .empty-state .empty-hint { font-size: 12px; }
+    .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+    .fade-enter-from, .fade-leave-to { opacity: 0; }
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(140, 180, 230, 0.18); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(140, 180, 230, 0.32); background-clip: padding-box; border: 2px solid transparent; }
+    /* Focus ring */
+    button:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; border-radius: 12px; }
     .btn-primary {
       background: linear-gradient(135deg, #6e9eff 0%, #4f7bff 100%);
       color: #fff;
@@ -130,6 +158,11 @@
     .stat-amber  { background: linear-gradient(135deg, rgba(255, 210, 111, 0.15), rgba(255, 210, 111, 0.04)); border-color: rgba(255, 210, 111, 0.25); }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
     .pulse { animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes tabIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .tab-anim { animation: tabIn 0.22s ease-out; }
   </style>
 </head>
 <body>
@@ -163,29 +196,49 @@
     <main class="flex-1 p-8 overflow-auto">
       <!-- ── Top KPI strip (always visible) ───────────────── -->
       <div class="grid grid-cols-4 gap-4 mb-8">
-        <div class="glass p-4 stat-blue">
-          <div class="text-xs text-muted">prax CLI</div>
-          <div class="text-lg font-semibold mt-1">
-            <span v-if="health.data.prax_on_path" class="text-acc">{{ health.data.prax_version || 'OK' }}</span>
-            <span v-else class="text-danger">未安装</span>
+        <div class="glass glass-hover p-4 stat-blue flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(114,168,255,0.2); color: var(--acc);">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="text-xs text-muted">prax CLI</div>
+            <div class="text-base font-semibold mt-0.5 truncate">
+              <span v-if="health.data.prax_on_path" class="text-acc">{{ health.data.prax_version || 'OK' }}</span>
+              <span v-else class="text-danger">未安装</span>
+            </div>
           </div>
         </div>
-        <div class="glass p-4 stat-cyan">
-          <div class="text-xs text-muted">微信账号</div>
-          <div class="text-lg font-semibold mt-1">{{ wechat.accounts.length }}</div>
+        <div class="glass glass-hover p-4 stat-cyan flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(88,239,207,0.2); color: var(--acc2);">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <div class="flex-1">
+            <div class="text-xs text-muted">微信账号</div>
+            <div class="text-base font-semibold mt-0.5">{{ wechat.accounts.length }}</div>
+          </div>
         </div>
-        <div class="glass p-4 stat-green">
-          <div class="text-xs text-muted">通知渠道</div>
-          <div class="text-lg font-semibold mt-1">{{ channels.list.length }}</div>
+        <div class="glass glass-hover p-4 stat-green flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(61,222,157,0.2); color: var(--ok);">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 6 12 13 2 6"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
+          </div>
+          <div class="flex-1">
+            <div class="text-xs text-muted">通知渠道</div>
+            <div class="text-base font-semibold mt-0.5">{{ channels.list.length }}</div>
+          </div>
         </div>
-        <div class="glass p-4 stat-amber">
-          <div class="text-xs text-muted">定时任务</div>
-          <div class="text-lg font-semibold mt-1">{{ cron.list.length }}</div>
+        <div class="glass glass-hover p-4 stat-amber flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(255,210,111,0.2); color: var(--warn);">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div class="flex-1">
+            <div class="text-xs text-muted">定时任务</div>
+            <div class="text-base font-semibold mt-0.5">{{ cron.list.length }}</div>
+          </div>
         </div>
       </div>
 
       <!-- ── Tab: 概览 (overview) ────────────────────────── -->
-      <section v-if="activeTab === 'overview'" class="space-y-6">
+      <section v-if="activeTab === 'overview'" class="space-y-6 tab-anim">
         <div class="glass p-6">
           <h2 class="text-lg font-semibold mb-1">快速上手</h2>
           <p class="text-sm text-muted mb-4">4 步开搭你的 AI 信息助理。每完成一步会自动打勾。</p>
@@ -226,14 +279,16 @@
       </section>
 
       <!-- ── Tab: 微信账号 ─────────────────────────────── -->
-      <section v-if="activeTab === 'wechat'" class="space-y-6">
+      <section v-if="activeTab === 'wechat'" class="space-y-6 tab-anim">
         <div class="glass p-6">
           <h2 class="text-lg font-semibold mb-1">个人微信账号</h2>
           <p class="text-sm text-muted mb-4">
             通过 <code>prax wechat login</code> 登录的 iLink 账号。新增渠道时下拉框会自动填充。
           </p>
-          <div v-if="wechat.accounts.length === 0" class="text-sm text-warn">
-            暂无账号 — 在终端跑 <code>prax wechat login</code> 用微信扫码后回来刷新。
+          <div v-if="wechat.accounts.length === 0" class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <div class="empty-title">暂无登录账号</div>
+            <div class="empty-hint">在终端跑 <code>prax wechat login</code> 用微信扫码，回来刷新本页</div>
           </div>
           <table v-else class="w-full text-sm">
             <thead>
@@ -255,7 +310,7 @@
       </section>
 
       <!-- ── Tab: 通知渠道 ─────────────────────────────── -->
-      <section v-if="activeTab === 'channels'" class="space-y-6">
+      <section v-if="activeTab === 'channels'" class="space-y-6 tab-anim">
         <div class="glass p-6">
           <div class="flex justify-between items-start mb-4">
             <div>
@@ -318,8 +373,10 @@
             <div v-if="saveError" class="text-sm text-danger">{{ saveError }}</div>
           </div>
 
-          <div v-if="channels.list.length === 0 && !showAddChannel" class="text-sm text-muted text-center py-6">
-            还没有渠道。点上方"+ 新增渠道"。
+          <div v-if="channels.list.length === 0 && !showAddChannel" class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 6 12 13 2 6"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
+            <div class="empty-title">还没有通知渠道</div>
+            <div class="empty-hint">点上方 <span class="text-acc">+ 新增渠道</span> 加第一个</div>
           </div>
           <table v-else-if="channels.list.length > 0" class="w-full text-sm">
             <thead>
@@ -355,7 +412,7 @@
       </section>
 
       <!-- ── Tab: 抓取源 ───────────────────────────────── -->
-      <section v-if="activeTab === 'sources'" class="space-y-6">
+      <section v-if="activeTab === 'sources'" class="space-y-6 tab-anim">
         <div class="glass p-6">
           <div class="flex justify-between items-start mb-4">
             <div>
@@ -420,7 +477,7 @@
       </section>
 
       <!-- ── Tab: 定时任务 ──────────────────────────────── -->
-      <section v-if="activeTab === 'cron'" class="space-y-6">
+      <section v-if="activeTab === 'cron'" class="space-y-6 tab-anim">
         <div class="glass p-6">
           <div class="flex justify-between items-start mb-4">
             <div>
@@ -510,8 +567,10 @@
             <div v-if="cronSaveError" class="text-sm text-danger">{{ cronSaveError }}</div>
           </div>
 
-          <div v-if="cron.list.length === 0 && !showAddCron" class="text-sm text-muted text-center py-6">
-            还没有任务。点上方"+ 新增任务"。
+          <div v-if="cron.list.length === 0 && !showAddCron" class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <div class="empty-title">还没有定时任务</div>
+            <div class="empty-hint">点上方 <span class="text-acc">+ 新增任务</span> 加第一个</div>
           </div>
           <table v-else-if="cron.list.length > 0" class="w-full text-sm">
             <thead>
@@ -545,7 +604,7 @@
       </section>
 
       <!-- ── Tab: 运行历史 ──────────────────────────────── -->
-      <section v-if="activeTab === 'runs'" class="space-y-6">
+      <section v-if="activeTab === 'runs'" class="space-y-6 tab-anim">
         <div class="glass p-6">
           <div class="flex justify-between items-start mb-4">
             <div>
@@ -558,8 +617,10 @@
           </div>
 
           <div v-if="runs.loading" class="text-sm text-muted">加载…</div>
-          <div v-else-if="runs.list.length === 0" class="text-sm text-muted text-center py-6">
-            还没运行记录。回"定时任务"点"立即触发"或等定时到点。
+          <div v-else-if="runs.list.length === 0" class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <div class="empty-title">还没运行记录</div>
+            <div class="empty-hint">去 <span class="text-acc cursor-pointer" @click="activeTab='cron'">定时任务</span> 点"立即触发"，或等定时到点</div>
           </div>
           <table v-else class="w-full text-sm">
             <thead>
