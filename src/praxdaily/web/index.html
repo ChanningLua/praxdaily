@@ -6,940 +6,869 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.jsdelivr.net/npm/vue@3.4.27/dist/vue.global.prod.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            bg: '#04050a',
+            panel: 'rgba(12, 15, 24, 0.86)',
+            panelStrong: 'rgba(8, 11, 20, 0.96)',
+            border: 'rgba(140, 180, 230, 0.12)',
+            borderHover: 'rgba(140, 180, 230, 0.32)',
+            ink: '#f3f6ff',
+            muted: '#95a4c8',
+            ok: '#3dde9d',
+            warn: '#ffd26f',
+            danger: '#ff6d8d',
+            acc: '#72a8ff',
+            acc2: '#58efcf',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    :root {
+      --bg: #04050a;
+      --panel: rgba(12, 15, 24, 0.86);
+      --panel-strong: rgba(8, 11, 20, 0.96);
+      --border: rgba(140, 180, 230, 0.12);
+      --border-hover: rgba(140, 180, 230, 0.32);
+      --ink: #f3f6ff;
+      --muted: #95a4c8;
+      --ok: #3dde9d;
+      --warn: #ffd26f;
+      --danger: #ff6d8d;
+      --acc: #72a8ff;
+      --acc2: #58efcf;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+    }
+    html, body { background: var(--bg); color: var(--ink); }
+    body {
+      background-image:
+        radial-gradient(1100px 700px at 80% -10%, rgba(114, 168, 255, 0.18), transparent 60%),
+        radial-gradient(900px 600px at -10% 100%, rgba(88, 239, 207, 0.12), transparent 60%),
+        linear-gradient(180deg, #04050a 0%, #050813 100%);
+      background-attachment: fixed;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    }
+    .glass {
+      background: var(--panel);
+      backdrop-filter: blur(14px) saturate(140%);
+      -webkit-backdrop-filter: blur(14px) saturate(140%);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 18px 60px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #6e9eff 0%, #4f7bff 100%);
+      color: #fff;
+      padding: 8px 16px; border-radius: 12px; font-size: 13px; font-weight: 500;
+      box-shadow: 0 8px 24px rgba(79, 123, 255, 0.35);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(79, 123, 255, 0.45); }
+    .btn-primary:disabled { opacity: 0.5; }
+    .btn-ghost {
+      background: rgba(255,255,255,0.04); color: var(--ink);
+      padding: 8px 14px; border-radius: 12px; font-size: 13px;
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover:not(:disabled) { background: rgba(255,255,255,0.08); border-color: var(--border-hover); }
+    .btn-ghost:disabled { opacity: 0.5; }
+    .btn-link { color: var(--acc); font-size: 12px; }
+    .btn-link:hover { text-decoration: underline; }
+    .btn-link.danger { color: var(--danger); }
+    .pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 10px; border-radius: 999px;
+      font-size: 11px; font-weight: 500;
+      border: 1px solid currentColor;
+      background: rgba(255,255,255,0.02);
+    }
+    .pill-ok { color: var(--ok); }
+    .pill-warn { color: var(--warn); }
+    .pill-danger { color: var(--danger); }
+    .pill-acc { color: var(--acc); }
+    .pill-muted { color: var(--muted); }
+    .tab {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; border-radius: 12px;
+      color: var(--muted); font-size: 13px; cursor: pointer;
+      transition: all 0.15s;
+      border: 1px solid transparent;
+    }
+    .tab:hover { background: rgba(255,255,255,0.04); color: var(--ink); }
+    .tab.active {
+      background: linear-gradient(135deg, rgba(114, 168, 255, 0.15) 0%, rgba(88, 239, 207, 0.05) 100%);
+      color: var(--ink);
+      border-color: rgba(114, 168, 255, 0.32);
+    }
+    .tab-icon { width: 18px; height: 18px; opacity: 0.85; flex-shrink: 0; }
+    input, select, textarea {
+      background: rgba(255,255,255,0.04) !important;
+      border: 1px solid var(--border) !important;
+      color: var(--ink) !important;
+      border-radius: 10px !important;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none !important;
+      border-color: var(--acc) !important;
+      background: rgba(255,255,255,0.06) !important;
+    }
+    input:disabled, select:disabled { opacity: 0.4; cursor: not-allowed; }
+    input[type="checkbox"] { accent-color: var(--acc); width: 16px; height: 16px; }
+    code { background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 6px; color: var(--acc2); font-size: 0.9em; }
+    .table-row { transition: background 0.1s; }
+    .table-row:hover { background: rgba(255,255,255,0.03); }
+    .stat-blue   { background: linear-gradient(135deg, rgba(114, 168, 255, 0.15), rgba(114, 168, 255, 0.04)); border-color: rgba(114, 168, 255, 0.25); }
+    .stat-cyan   { background: linear-gradient(135deg, rgba(88, 239, 207, 0.15), rgba(88, 239, 207, 0.04)); border-color: rgba(88, 239, 207, 0.25); }
+    .stat-green  { background: linear-gradient(135deg, rgba(61, 222, 157, 0.15), rgba(61, 222, 157, 0.04)); border-color: rgba(61, 222, 157, 0.25); }
+    .stat-amber  { background: linear-gradient(135deg, rgba(255, 210, 111, 0.15), rgba(255, 210, 111, 0.04)); border-color: rgba(255, 210, 111, 0.25); }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .pulse { animation: pulse 1.5s ease-in-out infinite; }
+  </style>
 </head>
-<body class="bg-gray-50 text-gray-900">
-  <div id="app" class="max-w-3xl mx-auto p-8 space-y-8">
-    <header>
-      <h1 class="text-3xl font-bold">praxdaily</h1>
-      <p class="text-gray-500 mt-1">本地 AI 信息助理面板。</p>
-    </header>
-
-    <!-- ── Quick Setup checklist ─────────────────────────────── -->
-    <section class="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-lg p-5">
-      <h2 class="text-base font-semibold text-blue-900 mb-3">快速上手 · 4 步</h2>
-      <ol class="space-y-2 text-sm">
-        <li :class="setupSteps.prax ? 'text-green-700' : 'text-gray-700'">
-          <span class="font-mono">{{ setupSteps.prax ? '✓' : '○' }}</span>
-          1. 安装 prax CLI
-          <span v-if="!setupSteps.prax" class="text-xs text-gray-500">
-            — 终端跑 <code class="bg-white px-1 rounded">npm install -g praxagent</code>
-          </span>
-        </li>
-        <li :class="setupSteps.wechat ? 'text-green-700' : 'text-gray-700'">
-          <span class="font-mono">{{ setupSteps.wechat ? '✓' : '○' }}</span>
-          2. 登录个人微信
-          <span v-if="!setupSteps.wechat" class="text-xs text-gray-500">
-            — 终端跑 <code class="bg-white px-1 rounded">prax wechat login</code> 用微信扫码
-          </span>
-        </li>
-        <li :class="setupSteps.channel ? 'text-green-700' : 'text-gray-700'">
-          <span class="font-mono">{{ setupSteps.channel ? '✓' : '○' }}</span>
-          3. 配一个推送渠道
-          <span v-if="!setupSteps.channel" class="text-xs text-gray-500">
-            — 下方"通知渠道"区点 + 新增
-          </span>
-        </li>
-        <li :class="setupSteps.cron ? 'text-green-700' : 'text-gray-700'">
-          <span class="font-mono">{{ setupSteps.cron ? '✓' : '○' }}</span>
-          4. 加一个定时任务
-          <span v-if="!setupSteps.cron" class="text-xs text-gray-500">
-            — 下方"定时任务"区点 + 新增
-          </span>
-        </li>
-      </ol>
-      <p v-if="setupSteps.allDone" class="mt-3 text-sm text-green-700 font-medium">
-        ✓ 全部就绪。点定时任务区的"立刻跑一次"立即触发，运行历史会出现在最下方。
-      </p>
-    </section>
-
-    <!-- ── Health ───────────────────────────────────────────── -->
-    <section class="bg-white rounded-lg shadow-sm border p-6">
-      <h2 class="text-lg font-semibold mb-4">运行状态</h2>
-      <div v-if="health.loading" class="text-gray-400">检查中…</div>
-      <div v-else-if="health.error" class="text-red-600">
-        <strong>error:</strong> {{ health.error }}
+<body>
+  <div id="app" class="min-h-screen flex">
+    <!-- ── Sidebar ───────────────────────────────────────── -->
+    <aside class="w-56 flex-shrink-0 p-4 space-y-1 border-r" style="border-color: var(--border);">
+      <div class="px-3 py-2 mb-4">
+        <div class="text-xl font-bold tracking-tight">praxdaily</div>
+        <div class="text-xs text-muted mt-0.5">本地 AI 信息助理</div>
       </div>
-      <dl v-else class="grid grid-cols-3 gap-y-2 text-sm">
-        <dt class="text-gray-500">praxdaily</dt>
-        <dd class="col-span-2 font-mono">{{ health.data.praxdaily_version }}</dd>
 
-        <dt class="text-gray-500">cwd</dt>
-        <dd class="col-span-2 font-mono break-all">{{ health.data.cwd }}</dd>
-
-        <dt class="text-gray-500">.prax/ exists</dt>
-        <dd class="col-span-2 font-mono">{{ health.data.prax_dir_exists ? 'yes' : 'no' }}</dd>
-
-        <dt class="text-gray-500">prax CLI</dt>
-        <dd class="col-span-2 font-mono">
-          <span v-if="health.data.prax_on_path">
-            {{ health.data.prax_version || health.data.prax_on_path }}
-          </span>
-          <span v-else class="text-red-600">
-            未安装 — 跑 <code class="bg-gray-100 px-1 rounded">npm install -g praxagent</code>
-          </span>
-        </dd>
-      </dl>
-    </section>
-
-    <!-- ── WeChat accounts (read-only) ──────────────────────── -->
-    <section class="bg-white rounded-lg shadow-sm border p-6">
-      <h2 class="text-lg font-semibold mb-2">个人微信账号</h2>
-      <p class="text-sm text-gray-500 mb-4">
-        通过 <code class="bg-gray-100 px-1 rounded">prax wechat login</code>
-        登录的 iLink 账号。新增渠道时下方下拉框会自动填充。
-      </p>
-      <div v-if="wechat.loading" class="text-gray-400 text-sm">加载…</div>
-      <div v-else-if="wechat.accounts.length === 0" class="text-sm text-gray-500">
-        没有已登录账号。先在终端跑：<br />
-        <code class="bg-gray-100 px-1 rounded mt-1 inline-block">prax wechat login</code>
+      <div
+        v-for="t in tabs"
+        :key="t.id"
+        @click="activeTab = t.id"
+        class="tab"
+        :class="{ active: activeTab === t.id }"
+      >
+        <span class="tab-icon" v-html="t.icon"></span>
+        <span>{{ t.label }}</span>
+        <span v-if="t.badge !== null" class="ml-auto text-xs text-muted">{{ t.badge }}</span>
       </div>
-      <ul v-else class="text-sm space-y-1">
-        <li v-for="a in wechat.accounts" :key="a.account_id" class="font-mono">
-          <span class="text-gray-700">{{ a.account_id }}</span>
-          <span class="text-gray-400 ml-2">user_id={{ a.user_id || '(none)' }}</span>
-        </li>
-      </ul>
-    </section>
 
-    <!-- ── Channels CRUD ────────────────────────────────────── -->
-    <section class="bg-white rounded-lg shadow-sm border p-6">
-      <div class="flex justify-between items-start mb-4">
-        <div>
-          <h2 class="text-lg font-semibold">通知渠道</h2>
-          <p class="text-sm text-gray-500 mt-1">
-            渠道写在
-            <code class="bg-gray-100 px-1 rounded">.prax/notify.yaml</code>。
-            cron 任务用渠道名引用，到期自动推。
+      <div class="pt-4 mt-4 border-t" style="border-color: var(--border);">
+        <div class="px-3 text-xs text-muted">v{{ health.data.praxdaily_version || '...' }}</div>
+        <div class="px-3 text-xs text-muted mt-1 truncate">{{ health.data.cwd || '' }}</div>
+      </div>
+    </aside>
+
+    <!-- ── Main ──────────────────────────────────────────── -->
+    <main class="flex-1 p-8 overflow-auto">
+      <!-- ── Top KPI strip (always visible) ───────────────── -->
+      <div class="grid grid-cols-4 gap-4 mb-8">
+        <div class="glass p-4 stat-blue">
+          <div class="text-xs text-muted">prax CLI</div>
+          <div class="text-lg font-semibold mt-1">
+            <span v-if="health.data.prax_on_path" class="text-acc">{{ health.data.prax_version || 'OK' }}</span>
+            <span v-else class="text-danger">未安装</span>
+          </div>
+        </div>
+        <div class="glass p-4 stat-cyan">
+          <div class="text-xs text-muted">微信账号</div>
+          <div class="text-lg font-semibold mt-1">{{ wechat.accounts.length }}</div>
+        </div>
+        <div class="glass p-4 stat-green">
+          <div class="text-xs text-muted">通知渠道</div>
+          <div class="text-lg font-semibold mt-1">{{ channels.list.length }}</div>
+        </div>
+        <div class="glass p-4 stat-amber">
+          <div class="text-xs text-muted">定时任务</div>
+          <div class="text-lg font-semibold mt-1">{{ cron.list.length }}</div>
+        </div>
+      </div>
+
+      <!-- ── Tab: 概览 (overview) ────────────────────────── -->
+      <section v-if="activeTab === 'overview'" class="space-y-6">
+        <div class="glass p-6">
+          <h2 class="text-lg font-semibold mb-1">快速上手</h2>
+          <p class="text-sm text-muted mb-4">4 步开搭你的 AI 信息助理。每完成一步会自动打勾。</p>
+          <ol class="space-y-3 text-sm">
+            <li v-for="(s, i) in setupChecklist" :key="i" class="flex items-start gap-3">
+              <span class="font-mono w-5 text-center mt-0.5" :class="s.done ? 'text-ok' : 'text-muted'">
+                {{ s.done ? '✓' : (i + 1) }}
+              </span>
+              <div :class="s.done ? 'text-ink' : 'text-muted'">
+                <div :class="s.done ? '' : 'font-medium text-ink'">{{ s.label }}</div>
+                <div v-if="!s.done" class="text-xs text-muted mt-0.5">{{ s.hint }}</div>
+              </div>
+            </li>
+          </ol>
+          <p v-if="setupChecklist.every(s => s.done)" class="mt-4 text-sm text-ok">
+            ✓ 全部就绪 — 切到"定时任务"屏点"立即触发"测试一次。
           </p>
         </div>
-        <button
-          @click="showAddForm = !showAddForm"
-          class="bg-gray-900 text-white text-sm px-3 py-2 rounded hover:bg-gray-700"
-        >
-          {{ showAddForm ? '取消' : '+ 新增渠道' }}
-        </button>
-      </div>
 
-      <!-- Add channel form -->
-      <div v-if="showAddForm" class="mb-6 bg-gray-50 border rounded p-4 space-y-3">
-        <div class="grid grid-cols-3 gap-2">
-          <label class="text-sm text-gray-600 col-span-1 self-center">
-            渠道名 <span class="text-red-500">*</span>
-          </label>
-          <input
-            v-model="form.name"
-            placeholder="例：my-wechat（这只是提示，请实际输入）"
-            class="col-span-2 border rounded px-2 py-1 text-sm font-mono"
-          />
+        <div class="glass p-6">
+          <h2 class="text-lg font-semibold mb-3">运行状态</h2>
+          <dl class="grid grid-cols-3 gap-y-3 text-sm">
+            <dt class="text-muted">cwd</dt>
+            <dd class="col-span-2 font-mono text-xs break-all">{{ health.data.cwd }}</dd>
+            <dt class="text-muted">.prax/ exists</dt>
+            <dd class="col-span-2">
+              <span class="pill" :class="health.data.prax_dir_exists ? 'pill-ok' : 'pill-muted'">
+                {{ health.data.prax_dir_exists ? 'yes' : 'no' }}
+              </span>
+            </dd>
+            <dt class="text-muted">prax CLI</dt>
+            <dd class="col-span-2 font-mono text-xs">
+              <span v-if="health.data.prax_on_path" class="text-acc">{{ health.data.prax_version || health.data.prax_on_path }}</span>
+              <span v-else class="text-danger">未安装 — 跑 <code>npm install -g praxagent</code></span>
+            </dd>
+          </dl>
         </div>
-        <div class="grid grid-cols-3 gap-2">
-          <label class="text-sm text-gray-600 col-span-1 self-center">Provider</label>
-          <select v-model="form.provider" class="col-span-2 border rounded px-2 py-1 text-sm">
-            <option value="wechat_personal">wechat_personal (个人微信)</option>
-            <option value="wechat_work_webhook">wechat_work_webhook (企业微信群机器人)</option>
-            <option value="feishu_webhook">feishu_webhook (飞书)</option>
-            <option value="lark_webhook">lark_webhook (Lark)</option>
-          </select>
-        </div>
+      </section>
 
-        <!-- wechat_personal extras -->
-        <template v-if="form.provider === 'wechat_personal'">
-          <div class="grid grid-cols-3 gap-2">
-            <label class="text-sm text-gray-600 col-span-1 self-center">account_id <span class="text-red-500">*</span></label>
-            <div class="col-span-2">
-              <select v-model="form.account_id" :disabled="wechat.accounts.length === 0" class="w-full border rounded px-2 py-1 text-sm font-mono disabled:bg-gray-100 disabled:text-gray-400">
-                <option value="">— 选一个已登录账号 —</option>
-                <option v-for="a in wechat.accounts" :key="a.account_id" :value="a.account_id">{{ a.account_id }}</option>
-              </select>
-              <p v-if="wechat.accounts.length === 0" class="text-xs text-orange-600 mt-1">
-                还没有微信账号 — 请先在终端跑
-                <code class="bg-orange-50 px-1 rounded">prax wechat login</code>
-                用微信扫码，再回来刷新本页。
+      <!-- ── Tab: 微信账号 ─────────────────────────────── -->
+      <section v-if="activeTab === 'wechat'" class="space-y-6">
+        <div class="glass p-6">
+          <h2 class="text-lg font-semibold mb-1">个人微信账号</h2>
+          <p class="text-sm text-muted mb-4">
+            通过 <code>prax wechat login</code> 登录的 iLink 账号。新增渠道时下拉框会自动填充。
+          </p>
+          <div v-if="wechat.accounts.length === 0" class="text-sm text-warn">
+            暂无账号 — 在终端跑 <code>prax wechat login</code> 用微信扫码后回来刷新。
+          </div>
+          <table v-else class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-muted text-xs uppercase tracking-wide">
+                <th class="pb-2 font-normal">account_id</th>
+                <th class="pb-2 font-normal">user_id</th>
+                <th class="pb-2 font-normal">saved at</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="a in wechat.accounts" :key="a.account_id" class="table-row border-t" style="border-color: var(--border);">
+                <td class="py-2 font-mono text-xs">{{ a.account_id }}</td>
+                <td class="py-2 font-mono text-xs text-muted">{{ a.user_id || '—' }}</td>
+                <td class="py-2 text-xs text-muted">{{ a.saved_at }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── Tab: 通知渠道 ─────────────────────────────── -->
+      <section v-if="activeTab === 'channels'" class="space-y-6">
+        <div class="glass p-6">
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <h2 class="text-lg font-semibold">通知渠道</h2>
+              <p class="text-sm text-muted mt-1">
+                渠道写在 <code>.prax/notify.yaml</code>，cron 任务用渠道名引用。
               </p>
             </div>
+            <button @click="showAddChannel = !showAddChannel" class="btn-primary">
+              {{ showAddChannel ? '取消' : '+ 新增渠道' }}
+            </button>
           </div>
-          <div class="grid grid-cols-3 gap-2">
-            <label class="text-sm text-gray-600 col-span-1 self-center">to</label>
-            <input v-model="form.to" placeholder="self" class="col-span-2 border rounded px-2 py-1 text-sm font-mono" />
-          </div>
-        </template>
 
-        <!-- webhook extras -->
-        <template v-if="form.provider !== 'wechat_personal'">
-          <div class="grid grid-cols-3 gap-2">
-            <label class="text-sm text-gray-600 col-span-1 self-center">webhook URL</label>
-            <input v-model="form.url" placeholder="https://… 或 ${ENV_VAR}" class="col-span-2 border rounded px-2 py-1 text-sm font-mono" />
-          </div>
-        </template>
-
-        <div class="grid grid-cols-3 gap-2">
-          <label class="text-sm text-gray-600 col-span-1 self-center">title 前缀（可选）</label>
-          <input v-model="form.default_title_prefix" placeholder="[Prax] " class="col-span-2 border rounded px-2 py-1 text-sm font-mono" />
-        </div>
-
-        <div class="flex justify-end gap-2 pt-2">
-          <button @click="resetForm" class="text-sm text-gray-600 px-3 py-1">清空</button>
-          <button
-            @click="saveChannel"
-            :disabled="!form.name || !form.provider"
-            class="bg-blue-600 text-white text-sm px-4 py-1 rounded disabled:opacity-50 hover:bg-blue-700"
-          >保存</button>
-        </div>
-        <div v-if="saveError" class="text-red-600 text-sm">{{ saveError }}</div>
-      </div>
-
-      <!-- Channels list -->
-      <div v-if="channels.loading" class="text-gray-400 text-sm">加载…</div>
-      <div v-else-if="channels.list.length === 0" class="text-sm text-gray-500">
-        没有渠道。点上方"新增渠道"添加第一个。
-      </div>
-      <table v-else class="w-full text-sm">
-        <thead>
-          <tr class="border-b text-left text-gray-500">
-            <th class="py-2">name</th>
-            <th>provider</th>
-            <th>config</th>
-            <th class="text-right">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="ch in channels.list" :key="ch.name" class="border-b last:border-0">
-            <td class="py-2 font-mono">{{ ch.name }}</td>
-            <td class="text-xs text-gray-600">{{ ch.provider }}</td>
-            <td class="text-xs text-gray-500 font-mono">
-              <span v-if="ch.account_id">account={{ ch.account_id.slice(0, 18) }}…</span>
-              <span v-if="ch.url">url={{ truncate(ch.url, 32) }}</span>
-              <span v-if="ch.to" class="ml-2">to={{ ch.to }}</span>
-            </td>
-            <td class="text-right whitespace-nowrap">
-              <button
-                @click="testSend(ch.name)"
-                :disabled="testing === ch.name"
-                class="text-xs text-blue-600 hover:underline disabled:opacity-50 mr-3"
-              >{{ testing === ch.name ? '发送中…' : '测发' }}</button>
-              <button
-                @click="deleteChannel(ch.name)"
-                class="text-xs text-red-600 hover:underline"
-              >删除</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-if="testResult" class="mt-3 text-sm" :class="testResult.ok ? 'text-green-600' : 'text-red-600'">
-        {{ testResult.message }}
-      </div>
-    </section>
-
-    <!-- ── Sources (ai-news-daily 抓什么) ──────────────────── -->
-    <section class="bg-white rounded-lg shadow-sm border p-6">
-      <div class="flex justify-between items-start mb-4">
-        <div>
-          <h2 class="text-lg font-semibold">抓取源 · ai-news-daily</h2>
-          <p class="text-sm text-gray-500 mt-1">
-            写到 <code class="bg-gray-100 px-1 rounded">.prax/sources.yaml</code>。
-            skill 跑时按这里的勾选 + 上限抓数据；不存在文件就用默认值。
-          </p>
-        </div>
-        <div class="space-x-2 text-sm">
-          <button @click="resetSources" class="text-xs text-gray-500 hover:underline">恢复默认</button>
-        </div>
-      </div>
-
-      <div v-if="sources.loading" class="text-sm text-gray-400">加载…</div>
-      <div v-else>
-        <table class="w-full text-sm mb-4">
-          <thead>
-            <tr class="border-b text-left text-gray-500">
-              <th class="py-2 w-12"></th>
-              <th>source</th>
-              <th>抓取 limit</th>
-              <th>过滤后 top_n</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(s, i) in sources.list" :key="s.id" class="border-b last:border-0">
-              <td class="py-2"><input type="checkbox" v-model="s.enabled" /></td>
-              <td class="font-mono">
-                {{ s.id }}
-                <span v-if="!isKnownSourceId(s.id)" class="text-xs text-orange-600 ml-2">
-                  (skill 暂不映射此 id, 会跳过)
-                </span>
-              </td>
-              <td><input type="number" v-model.number="s.limit" min="1" max="1000" class="border rounded px-2 py-1 w-20 text-xs font-mono" /></td>
-              <td><input type="number" v-model.number="s.top_n" min="1" :max="s.limit" class="border rounded px-2 py-1 w-20 text-xs font-mono" /></td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div class="space-y-3 mb-4">
-          <div>
-            <label class="text-sm text-gray-600 block mb-1">关键词 · include（命中其一才保留）</label>
-            <input v-model="sources.includeText" placeholder="逗号分隔，例：AI, LLM, GPT, agent" class="w-full border rounded px-2 py-1 text-sm font-mono" />
-          </div>
-          <div>
-            <label class="text-sm text-gray-600 block mb-1">关键词 · exclude（命中任一就丢弃，可留空）</label>
-            <input v-model="sources.excludeText" placeholder="逗号分隔，例：广告, 推广" class="w-full border rounded px-2 py-1 text-sm font-mono" />
-          </div>
-        </div>
-
-        <div class="flex justify-between items-center pt-2 border-t">
-          <p class="text-xs text-gray-500">
-            <span v-if="sources.is_user_config_present" class="text-green-700">✓ .prax/sources.yaml 已自定义</span>
-            <span v-else class="text-gray-500">○ 还在用默认值（无文件）</span>
-          </p>
-          <div>
-            <span v-if="sourcesSaveResult" class="text-xs mr-3" :class="sourcesSaveResult.ok ? 'text-green-600' : 'text-red-600'">
-              {{ sourcesSaveResult.message }}
-            </span>
-            <button
-              @click="saveSources"
-              :disabled="savingSources"
-              class="bg-blue-600 text-white text-sm px-4 py-1 rounded disabled:opacity-50 hover:bg-blue-700"
-            >{{ savingSources ? '保存中…' : '保存' }}</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ── Schedule ─────────────────────────────────────────── -->
-    <section class="bg-white rounded-lg shadow-sm border p-6">
-      <div class="flex justify-between items-start mb-4">
-        <div>
-          <h2 class="text-lg font-semibold">定时任务</h2>
-          <p class="text-sm text-gray-500 mt-1">
-            任务写在
-            <code class="bg-gray-100 px-1 rounded">.prax/cron.yaml</code>。
-            到点 <code class="bg-gray-100 px-1 rounded">prax cron</code> 调度器自动跑，
-            完成后按上面渠道推。
-          </p>
-        </div>
-        <div class="space-x-2">
-          <button
-            @click="runNow"
-            :disabled="cronAction === 'run'"
-            class="text-sm px-3 py-2 rounded border hover:bg-gray-50 disabled:opacity-50"
-          >{{ cronAction === 'run' ? '触发中…' : '立刻跑一次' }}</button>
-          <button
-            @click="showAddCron = !showAddCron"
-            class="bg-gray-900 text-white text-sm px-3 py-2 rounded hover:bg-gray-700"
-          >{{ showAddCron ? '取消' : '+ 新增任务' }}</button>
-        </div>
-      </div>
-
-      <!-- Dispatcher install/uninstall -->
-      <div class="bg-blue-50 border border-blue-100 rounded p-3 mb-4 text-sm">
-        <p class="text-blue-800 font-medium mb-1">系统调度器（macOS LaunchAgent / Linux crontab）</p>
-        <p class="text-blue-700 text-xs mb-2">
-          安装后系统每分钟唤醒一次，跑所有到期的任务。卸载后只能手动 "立刻跑一次"。
-        </p>
-        <div class="flex gap-2">
-          <button
-            @click="installDispatcher"
-            :disabled="cronAction === 'install'"
-            class="bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
-          >{{ cronAction === 'install' ? '安装中…' : 'Install dispatcher' }}</button>
-          <button
-            @click="uninstallDispatcher"
-            :disabled="cronAction === 'uninstall'"
-            class="border border-blue-300 text-blue-700 text-xs px-3 py-1 rounded hover:bg-blue-100 disabled:opacity-50"
-          >{{ cronAction === 'uninstall' ? '卸载中…' : 'Uninstall' }}</button>
-        </div>
-        <div v-if="cronOutput" class="mt-2 text-xs font-mono bg-white border rounded p-2 whitespace-pre-wrap">{{ cronOutput }}</div>
-      </div>
-
-      <div v-if="triggerResult" class="mb-3 p-3 rounded text-sm" :class="triggerResult.ok ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'">
-        <div class="font-medium">{{ triggerResult.headline }}</div>
-        <pre v-if="triggerResult.tail" class="mt-2 text-xs font-mono bg-white border rounded p-2 max-h-40 overflow-auto whitespace-pre-wrap">{{ triggerResult.tail }}</pre>
-      </div>
-
-      <!-- Add cron job form -->
-      <div v-if="showAddCron" class="mb-6 bg-gray-50 border rounded p-4 space-y-3">
-        <div class="grid grid-cols-3 gap-2">
-          <label class="text-sm text-gray-600 col-span-1 self-center">任务名 <span class="text-red-500">*</span></label>
-          <input v-model="cronForm.name" placeholder="例：daily-news（请实际输入）" class="col-span-2 border rounded px-2 py-1 text-sm font-mono" />
-        </div>
-
-        <div class="grid grid-cols-3 gap-2">
-          <label class="text-sm text-gray-600 col-span-1 self-center">频率</label>
-          <div class="col-span-2 space-y-2">
-            <select v-model="cronForm.preset" class="w-full border rounded px-2 py-1 text-sm">
-              <option value="daily-at">每天 X 点 X 分</option>
-              <option value="every-n-hours">每隔 N 小时</option>
-              <option value="every-n-minutes">每隔 N 分钟（调试用）</option>
-              <option value="custom">自定义 cron 表达式</option>
-            </select>
-
-            <template v-if="cronForm.preset === 'daily-at'">
-              <input v-model="cronForm.dailyTime" type="time" class="border rounded px-2 py-1 text-sm" />
-            </template>
-            <template v-else-if="cronForm.preset === 'every-n-hours'">
-              <div class="flex items-center gap-2 text-sm">
-                每隔 <input v-model.number="cronForm.everyN" type="number" min="1" max="23" class="border rounded px-2 py-1 w-16" /> 小时
+          <div v-if="showAddChannel" class="rounded-xl border p-4 mb-4 space-y-3" style="border-color: var(--border); background: rgba(255,255,255,0.02);">
+            <div class="grid grid-cols-3 gap-3">
+              <label class="text-sm text-muted self-center">渠道名 <span class="text-danger">*</span></label>
+              <input v-model="form.name" placeholder="例：my-wechat（请实际输入）" class="col-span-2 px-3 py-1.5 text-sm font-mono" />
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <label class="text-sm text-muted self-center">Provider</label>
+              <select v-model="form.provider" class="col-span-2 px-3 py-1.5 text-sm">
+                <option value="wechat_personal">wechat_personal · 个人微信</option>
+                <option value="wechat_work_webhook">wechat_work_webhook · 企业微信群机器人</option>
+                <option value="feishu_webhook">feishu_webhook · 飞书</option>
+                <option value="lark_webhook">lark_webhook · Lark</option>
+              </select>
+            </div>
+            <template v-if="form.provider === 'wechat_personal'">
+              <div class="grid grid-cols-3 gap-3">
+                <label class="text-sm text-muted self-center">account_id <span class="text-danger">*</span></label>
+                <div class="col-span-2">
+                  <select v-model="form.account_id" :disabled="wechat.accounts.length === 0" class="w-full px-3 py-1.5 text-sm font-mono">
+                    <option value="">— 选一个已登录账号 —</option>
+                    <option v-for="a in wechat.accounts" :key="a.account_id" :value="a.account_id">{{ a.account_id }}</option>
+                  </select>
+                  <p v-if="wechat.accounts.length === 0" class="text-xs text-warn mt-1">
+                    暂无微信账号 — 在终端跑 <code>prax wechat login</code> 后再来。
+                  </p>
+                </div>
               </div>
-            </template>
-            <template v-else-if="cronForm.preset === 'every-n-minutes'">
-              <div class="flex items-center gap-2 text-sm">
-                每隔 <input v-model.number="cronForm.everyN" type="number" min="1" max="59" class="border rounded px-2 py-1 w-16" /> 分钟
+              <div class="grid grid-cols-3 gap-3">
+                <label class="text-sm text-muted self-center">to</label>
+                <input v-model="form.to" placeholder="self" class="col-span-2 px-3 py-1.5 text-sm font-mono" />
               </div>
             </template>
             <template v-else>
-              <input v-model="cronForm.rawSchedule" placeholder="0 17 * * *" class="border rounded px-2 py-1 text-sm font-mono w-full" />
+              <div class="grid grid-cols-3 gap-3">
+                <label class="text-sm text-muted self-center">webhook URL</label>
+                <input v-model="form.url" placeholder="https://… 或 ${ENV_VAR}" class="col-span-2 px-3 py-1.5 text-sm font-mono" />
+              </div>
             </template>
-
-            <p class="text-xs text-gray-500 font-mono">将编译为：{{ compiledSchedule }}</p>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-3 gap-2">
-          <label class="text-sm text-gray-600 col-span-1 pt-2">Prompt <span class="text-red-500">*</span></label>
-          <textarea
-            v-model="cronForm.prompt"
-            rows="3"
-            placeholder="触发 ai-news-daily 技能"
-            class="col-span-2 border rounded px-2 py-1 text-sm font-mono"
-          ></textarea>
-        </div>
-
-        <div class="grid grid-cols-3 gap-2">
-          <label class="text-sm text-gray-600 col-span-1 self-center">通知</label>
-          <div class="col-span-2 flex items-center gap-3 text-sm">
-            <label class="flex items-center gap-1">
-              <input type="checkbox" v-model="cronForm.notifyOnSuccess" /> 成功
-            </label>
-            <label class="flex items-center gap-1">
-              <input type="checkbox" v-model="cronForm.notifyOnFailure" /> 失败
-            </label>
-            →
-            <select v-model="cronForm.notifyChannel" class="border rounded px-2 py-1 text-sm">
-              <option value="">— 不发通知 —</option>
-              <option v-for="ch in channels.list" :key="ch.name" :value="ch.name">{{ ch.name }} ({{ ch.provider }})</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="flex justify-end gap-2 pt-2">
-          <button @click="resetCronForm" class="text-sm text-gray-600 px-3 py-1">清空</button>
-          <button
-            @click="saveCronJob"
-            :disabled="!cronForm.name || !cronForm.prompt"
-            class="bg-blue-600 text-white text-sm px-4 py-1 rounded disabled:opacity-50 hover:bg-blue-700"
-          >保存</button>
-        </div>
-        <div v-if="cronSaveError" class="text-red-600 text-sm">{{ cronSaveError }}</div>
-      </div>
-
-      <!-- Cron jobs list -->
-      <div v-if="cron.loading" class="text-gray-400 text-sm">加载…</div>
-      <div v-else-if="cron.list.length === 0" class="text-sm text-gray-500">
-        没有任务。点上方"新增任务"添加第一个。
-      </div>
-      <table v-else class="w-full text-sm">
-        <thead>
-          <tr class="border-b text-left text-gray-500">
-            <th class="py-2">name</th>
-            <th>schedule</th>
-            <th>notify</th>
-            <th>prompt</th>
-            <th class="text-right">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="j in cron.list" :key="j.name" class="border-b last:border-0">
-            <td class="py-2 font-mono">{{ j.name }}</td>
-            <td class="text-xs font-mono">{{ j.schedule }}</td>
-            <td class="text-xs text-gray-600">
-              <span v-if="j.notify_channel">{{ (j.notify_on || []).join(',') || '—' }} → {{ j.notify_channel }}</span>
-              <span v-else class="text-gray-400">—</span>
-            </td>
-            <td class="text-xs text-gray-500 truncate max-w-xs">{{ truncate(j.prompt, 40) }}</td>
-            <td class="text-right whitespace-nowrap">
-              <button
-                @click="triggerJobNow(j.name)"
-                :disabled="triggering === j.name"
-                class="text-xs text-blue-600 hover:underline disabled:opacity-50 mr-3"
-                title="立即跑一次这个任务，跳过 schedule 检查"
-              >{{ triggering === j.name ? '执行中…' : '立即触发' }}</button>
-              <button @click="deleteCronJob(j.name)" class="text-xs text-red-600 hover:underline">删除</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
-
-    <!-- ── Runs history ────────────────────────────────────── -->
-    <section class="bg-white rounded-lg shadow-sm border p-6">
-      <div class="flex justify-between items-start mb-4">
-        <div>
-          <h2 class="text-lg font-semibold">运行历史</h2>
-          <p class="text-sm text-gray-500 mt-1">
-            cron 调度器每跑一次，日志写到
-            <code class="bg-gray-100 px-1 rounded">.prax/logs/cron/&lt;name&gt;-&lt;ts&gt;.log</code>。
-            按时间倒序最近 30 条。
-          </p>
-        </div>
-        <button @click="fetchRuns" class="text-sm border rounded px-3 py-1 hover:bg-gray-50">刷新</button>
-      </div>
-
-      <div v-if="runs.loading" class="text-gray-400 text-sm">加载…</div>
-      <div v-else-if="runs.list.length === 0" class="text-sm text-gray-500">
-        还没有运行记录。点上方"立刻跑一次"或等定时任务到点。
-      </div>
-      <table v-else class="w-full text-sm">
-        <thead>
-          <tr class="border-b text-left text-gray-500">
-            <th class="py-2">job</th>
-            <th>时间</th>
-            <th>状态</th>
-            <th>大小</th>
-            <th class="text-right">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="r in runs.list.slice(0, 30)"
-            :key="r.filename"
-            class="border-b last:border-0 hover:bg-gray-50 cursor-pointer"
-            @click="openRun(r.filename)"
-          >
-            <td class="py-2 font-mono">{{ r.name }}</td>
-            <td class="text-xs font-mono">{{ formatStarted(r.started_at) }}</td>
-            <td class="text-xs">
-              <span v-if="runStatuses[r.filename] === 'success'" class="text-green-600">✓ success</span>
-              <span v-else-if="runStatuses[r.filename] === 'failure'" class="text-red-600">✗ failure</span>
-              <span v-else class="text-gray-400">—</span>
-            </td>
-            <td class="text-xs text-gray-500">{{ r.size_bytes }} B</td>
-            <td class="text-right text-xs text-blue-600">查看</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <!-- Run viewer modal -->
-      <div
-        v-if="viewedRun"
-        class="fixed inset-0 bg-black/40 flex items-center justify-center p-8 z-50"
-        @click.self="viewedRun = null"
-      >
-        <div class="bg-white rounded-lg shadow-lg max-w-3xl w-full max-h-[80vh] flex flex-col">
-          <div class="flex justify-between items-center border-b p-4">
-            <div>
-              <h3 class="font-semibold font-mono">{{ viewedRun.name }}</h3>
-              <p class="text-xs text-gray-500 font-mono">{{ viewedRun.filename }}</p>
+            <div class="grid grid-cols-3 gap-3">
+              <label class="text-sm text-muted self-center">title 前缀</label>
+              <input v-model="form.default_title_prefix" placeholder="[Prax] " class="col-span-2 px-3 py-1.5 text-sm font-mono" />
             </div>
-            <button @click="viewedRun = null" class="text-gray-400 hover:text-gray-600">✕</button>
+            <div class="flex justify-end gap-3 pt-2">
+              <button @click="resetForm" class="btn-link text-muted">清空</button>
+              <button @click="saveChannel" :disabled="!form.name || !form.provider" class="btn-primary">保存</button>
+            </div>
+            <div v-if="saveError" class="text-sm text-danger">{{ saveError }}</div>
           </div>
-          <div class="p-4 overflow-auto">
-            <p class="text-xs mb-2">
-              status:
-              <span v-if="viewedRun.status === 'success'" class="text-green-600 font-mono">success</span>
-              <span v-else-if="viewedRun.status === 'failure'" class="text-red-600 font-mono">failure</span>
-              <span v-else class="text-gray-400 font-mono">unknown</span>
-              · {{ viewedRun.size_bytes }} bytes
-            </p>
-            <pre class="bg-gray-900 text-gray-100 text-xs font-mono p-3 rounded overflow-auto whitespace-pre-wrap break-all">{{ viewedRun.content }}</pre>
+
+          <div v-if="channels.list.length === 0 && !showAddChannel" class="text-sm text-muted text-center py-6">
+            还没有渠道。点上方"+ 新增渠道"。
+          </div>
+          <table v-else-if="channels.list.length > 0" class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-muted text-xs uppercase tracking-wide">
+                <th class="pb-2 font-normal">name</th>
+                <th class="pb-2 font-normal">provider</th>
+                <th class="pb-2 font-normal">config</th>
+                <th class="pb-2 font-normal text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="ch in channels.list" :key="ch.name" class="table-row border-t" style="border-color: var(--border);">
+                <td class="py-3 font-mono">{{ ch.name }}</td>
+                <td class="py-3"><span class="pill pill-acc">{{ ch.provider }}</span></td>
+                <td class="py-3 text-xs text-muted font-mono truncate max-w-xs">
+                  <span v-if="ch.account_id">account={{ ch.account_id }}</span>
+                  <span v-if="ch.url">url={{ truncate(ch.url, 30) }}</span>
+                  <span v-if="ch.to" class="ml-2">to={{ ch.to }}</span>
+                </td>
+                <td class="py-3 text-right whitespace-nowrap">
+                  <button @click="testSend(ch.name)" :disabled="testing === ch.name" class="btn-link mr-3">
+                    {{ testing === ch.name ? '发送中…' : '测发' }}
+                  </button>
+                  <button @click="deleteChannel(ch.name)" class="btn-link danger">删除</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-if="testResult" class="mt-3 text-sm" :class="testResult.ok ? 'text-ok' : 'text-danger'">
+            {{ testResult.message }}
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <p class="text-xs text-gray-400 text-center pt-4">
-      praxdaily 0.4.0 · 五屏齐了；下一步进 Phase 2（招 5-10 个 beta 用户）
-    </p>
+      <!-- ── Tab: 抓取源 ───────────────────────────────── -->
+      <section v-if="activeTab === 'sources'" class="space-y-6">
+        <div class="glass p-6">
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <h2 class="text-lg font-semibold">抓取源 · ai-news-daily</h2>
+              <p class="text-sm text-muted mt-1">
+                写到 <code>.prax/sources.yaml</code>，skill 跑时按这里的勾选 + 上限抓数据。
+              </p>
+            </div>
+            <div>
+              <span class="pill mr-2" :class="sources.is_user_config_present ? 'pill-ok' : 'pill-muted'">
+                {{ sources.is_user_config_present ? '已自定义' : '默认值' }}
+              </span>
+              <button @click="resetSources" class="btn-link text-muted">恢复默认</button>
+            </div>
+          </div>
+
+          <div v-if="sources.loading" class="text-sm text-muted">加载…</div>
+          <div v-else>
+            <table class="w-full text-sm mb-5">
+              <thead>
+                <tr class="text-left text-muted text-xs uppercase tracking-wide">
+                  <th class="pb-2 w-12 font-normal"></th>
+                  <th class="pb-2 font-normal">source</th>
+                  <th class="pb-2 font-normal">抓取 limit</th>
+                  <th class="pb-2 font-normal">过滤后 top_n</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="s in sources.list" :key="s.id" class="table-row border-t" style="border-color: var(--border);">
+                  <td class="py-3"><input type="checkbox" v-model="s.enabled" /></td>
+                  <td class="py-3 font-mono">
+                    {{ s.id }}
+                    <span v-if="!isKnownSourceId(s.id)" class="text-xs text-warn ml-2">(skill 暂不映射)</span>
+                  </td>
+                  <td class="py-3"><input type="number" v-model.number="s.limit" min="1" max="1000" class="px-2 py-1 w-20 text-xs font-mono" /></td>
+                  <td class="py-3"><input type="number" v-model.number="s.top_n" min="1" :max="s.limit" class="px-2 py-1 w-20 text-xs font-mono" /></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="space-y-3 mb-4">
+              <div>
+                <label class="text-sm text-muted block mb-1">关键词 · include（命中其一才保留）</label>
+                <input v-model="sources.includeText" placeholder="逗号分隔，例：AI, LLM, GPT, agent" class="w-full px-3 py-1.5 text-sm font-mono" />
+              </div>
+              <div>
+                <label class="text-sm text-muted block mb-1">关键词 · exclude（命中任一就丢弃）</label>
+                <input v-model="sources.excludeText" placeholder="逗号分隔，例：广告, 推广" class="w-full px-3 py-1.5 text-sm font-mono" />
+              </div>
+            </div>
+
+            <div class="flex justify-end gap-3 items-center">
+              <span v-if="sourcesSaveResult" class="text-xs" :class="sourcesSaveResult.ok ? 'text-ok' : 'text-danger'">
+                {{ sourcesSaveResult.message }}
+              </span>
+              <button @click="saveSources" :disabled="savingSources" class="btn-primary">
+                {{ savingSources ? '保存中…' : '保存' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Tab: 定时任务 ──────────────────────────────── -->
+      <section v-if="activeTab === 'cron'" class="space-y-6">
+        <div class="glass p-6">
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <h2 class="text-lg font-semibold">定时任务</h2>
+              <p class="text-sm text-muted mt-1">
+                到点 <code>prax cron</code> 调度器自动跑，完成后按上面渠道推。
+              </p>
+            </div>
+            <div class="space-x-2">
+              <button @click="runNow" :disabled="cronAction === 'run'" class="btn-ghost">
+                {{ cronAction === 'run' ? '触发中…' : '跑所有到期' }}
+              </button>
+              <button @click="showAddCron = !showAddCron" class="btn-primary">
+                {{ showAddCron ? '取消' : '+ 新增任务' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="rounded-xl border p-4 mb-4" style="border-color: var(--border); background: rgba(114, 168, 255, 0.06);">
+            <div class="flex justify-between items-center text-sm">
+              <div>
+                <div class="font-medium text-acc">系统调度器</div>
+                <div class="text-xs text-muted mt-0.5">macOS LaunchAgent / Linux crontab，每分钟唤醒跑到期任务</div>
+              </div>
+              <div class="space-x-2">
+                <button @click="installDispatcher" :disabled="cronAction === 'install'" class="btn-ghost text-xs">
+                  {{ cronAction === 'install' ? '安装中…' : 'Install' }}
+                </button>
+                <button @click="uninstallDispatcher" :disabled="cronAction === 'uninstall'" class="btn-ghost text-xs">
+                  {{ cronAction === 'uninstall' ? '卸载中…' : 'Uninstall' }}
+                </button>
+              </div>
+            </div>
+            <pre v-if="cronOutput" class="mt-3 text-xs font-mono p-3 rounded whitespace-pre-wrap" style="background: rgba(0,0,0,0.3);">{{ cronOutput }}</pre>
+          </div>
+
+          <div v-if="triggerResult" class="mb-4 p-3 rounded-xl text-sm border" :class="triggerResult.ok ? 'border-ok' : 'border-danger'" :style="{ background: triggerResult.ok ? 'rgba(61, 222, 157, 0.06)' : 'rgba(255, 109, 141, 0.06)' }">
+            <div class="font-medium" :class="triggerResult.ok ? 'text-ok' : 'text-danger'">{{ triggerResult.headline }}</div>
+            <pre v-if="triggerResult.tail" class="mt-2 text-xs font-mono p-2 rounded max-h-40 overflow-auto whitespace-pre-wrap" style="background: rgba(0,0,0,0.3);">{{ triggerResult.tail }}</pre>
+          </div>
+
+          <div v-if="showAddCron" class="rounded-xl border p-4 mb-4 space-y-3" style="border-color: var(--border); background: rgba(255,255,255,0.02);">
+            <div class="grid grid-cols-3 gap-3">
+              <label class="text-sm text-muted self-center">任务名 <span class="text-danger">*</span></label>
+              <input v-model="cronForm.name" placeholder="例：daily-news（请实际输入）" class="col-span-2 px-3 py-1.5 text-sm font-mono" />
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <label class="text-sm text-muted self-center">频率</label>
+              <div class="col-span-2 space-y-2">
+                <select v-model="cronForm.preset" class="w-full px-3 py-1.5 text-sm">
+                  <option value="daily-at">每天 X 点 X 分</option>
+                  <option value="every-n-hours">每隔 N 小时</option>
+                  <option value="every-n-minutes">每隔 N 分钟（调试用）</option>
+                  <option value="custom">自定义 cron 表达式</option>
+                </select>
+                <input v-if="cronForm.preset === 'daily-at'" v-model="cronForm.dailyTime" type="time" class="px-3 py-1.5 text-sm" />
+                <div v-else-if="cronForm.preset === 'every-n-hours'" class="flex items-center gap-2 text-sm">
+                  每隔 <input v-model.number="cronForm.everyN" type="number" min="1" max="23" class="px-2 py-1 w-16" /> 小时
+                </div>
+                <div v-else-if="cronForm.preset === 'every-n-minutes'" class="flex items-center gap-2 text-sm">
+                  每隔 <input v-model.number="cronForm.everyN" type="number" min="1" max="59" class="px-2 py-1 w-16" /> 分钟
+                </div>
+                <input v-else v-model="cronForm.rawSchedule" placeholder="0 17 * * *" class="px-3 py-1.5 text-sm font-mono w-full" />
+                <p class="text-xs text-muted font-mono">将编译为：<span class="text-acc2">{{ compiledSchedule }}</span></p>
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <label class="text-sm text-muted pt-2">Prompt <span class="text-danger">*</span></label>
+              <textarea v-model="cronForm.prompt" rows="3" class="col-span-2 px-3 py-1.5 text-sm font-mono"></textarea>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <label class="text-sm text-muted self-center">通知</label>
+              <div class="col-span-2 flex items-center gap-3 text-sm flex-wrap">
+                <label class="flex items-center gap-1"><input type="checkbox" v-model="cronForm.notifyOnSuccess" /> 成功</label>
+                <label class="flex items-center gap-1"><input type="checkbox" v-model="cronForm.notifyOnFailure" /> 失败</label>
+                <span class="text-muted">→</span>
+                <select v-model="cronForm.notifyChannel" class="px-2 py-1 text-sm">
+                  <option value="">— 不发通知 —</option>
+                  <option v-for="ch in channels.list" :key="ch.name" :value="ch.name">{{ ch.name }}</option>
+                </select>
+              </div>
+            </div>
+            <div class="flex justify-end gap-3 pt-2">
+              <button @click="resetCronForm" class="btn-link text-muted">清空</button>
+              <button @click="saveCronJob" :disabled="!cronForm.name || !cronForm.prompt" class="btn-primary">保存</button>
+            </div>
+            <div v-if="cronSaveError" class="text-sm text-danger">{{ cronSaveError }}</div>
+          </div>
+
+          <div v-if="cron.list.length === 0 && !showAddCron" class="text-sm text-muted text-center py-6">
+            还没有任务。点上方"+ 新增任务"。
+          </div>
+          <table v-else-if="cron.list.length > 0" class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-muted text-xs uppercase tracking-wide">
+                <th class="pb-2 font-normal">name</th>
+                <th class="pb-2 font-normal">schedule</th>
+                <th class="pb-2 font-normal">notify</th>
+                <th class="pb-2 font-normal">prompt</th>
+                <th class="pb-2 font-normal text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="j in cron.list" :key="j.name" class="table-row border-t" style="border-color: var(--border);">
+                <td class="py-3 font-mono">{{ j.name }}</td>
+                <td class="py-3 text-xs font-mono text-acc">{{ j.schedule }}</td>
+                <td class="py-3 text-xs">
+                  <span v-if="j.notify_channel" class="pill pill-acc">{{ (j.notify_on || []).join(',') }} → {{ j.notify_channel }}</span>
+                  <span v-else class="text-muted">—</span>
+                </td>
+                <td class="py-3 text-xs text-muted truncate max-w-xs">{{ truncate(j.prompt, 35) }}</td>
+                <td class="py-3 text-right whitespace-nowrap">
+                  <button @click="triggerJobNow(j.name)" :disabled="triggering === j.name" class="btn-link mr-3">
+                    {{ triggering === j.name ? '执行中…' : '立即触发' }}
+                  </button>
+                  <button @click="deleteCronJob(j.name)" class="btn-link danger">删除</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── Tab: 运行历史 ──────────────────────────────── -->
+      <section v-if="activeTab === 'runs'" class="space-y-6">
+        <div class="glass p-6">
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <h2 class="text-lg font-semibold">运行历史</h2>
+              <p class="text-sm text-muted mt-1">
+                <code>.prax/logs/cron/&lt;name&gt;-&lt;ts&gt;.log</code>，按时间倒序最近 30 条。
+              </p>
+            </div>
+            <button @click="fetchRuns" class="btn-ghost">刷新</button>
+          </div>
+
+          <div v-if="runs.loading" class="text-sm text-muted">加载…</div>
+          <div v-else-if="runs.list.length === 0" class="text-sm text-muted text-center py-6">
+            还没运行记录。回"定时任务"点"立即触发"或等定时到点。
+          </div>
+          <table v-else class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-muted text-xs uppercase tracking-wide">
+                <th class="pb-2 font-normal">job</th>
+                <th class="pb-2 font-normal">时间</th>
+                <th class="pb-2 font-normal">状态</th>
+                <th class="pb-2 font-normal">大小</th>
+                <th class="pb-2 font-normal text-right"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in runs.list.slice(0, 30)" :key="r.filename" class="table-row border-t cursor-pointer" style="border-color: var(--border);" @click="openRun(r.filename)">
+                <td class="py-3 font-mono">{{ r.name }}</td>
+                <td class="py-3 text-xs font-mono text-muted">{{ formatStarted(r.started_at) }}</td>
+                <td class="py-3">
+                  <span v-if="runStatuses[r.filename] === 'success'" class="pill pill-ok">success</span>
+                  <span v-else-if="runStatuses[r.filename] === 'failure'" class="pill pill-danger">failure</span>
+                  <span v-else class="pill pill-muted pulse">…</span>
+                </td>
+                <td class="py-3 text-xs text-muted">{{ r.size_bytes }} B</td>
+                <td class="py-3 text-right text-xs text-acc">查看 →</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <!-- ── Run viewer modal ────────────────────────────── -->
+    <div v-if="viewedRun" class="fixed inset-0 flex items-center justify-center p-8 z-50" style="background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);" @click.self="viewedRun = null">
+      <div class="glass max-w-3xl w-full max-h-[80vh] flex flex-col">
+        <div class="flex justify-between items-center p-5 border-b" style="border-color: var(--border);">
+          <div>
+            <div class="font-semibold font-mono">{{ viewedRun.name }}</div>
+            <div class="text-xs text-muted font-mono">{{ viewedRun.filename }}</div>
+          </div>
+          <button @click="viewedRun = null" class="text-muted hover:text-ink text-xl leading-none">✕</button>
+        </div>
+        <div class="p-5 overflow-auto">
+          <div class="text-xs mb-3 flex items-center gap-3">
+            status:
+            <span v-if="viewedRun.status === 'success'" class="pill pill-ok">success</span>
+            <span v-else-if="viewedRun.status === 'failure'" class="pill pill-danger">failure</span>
+            <span v-else class="pill pill-muted">unknown</span>
+            <span class="text-muted">· {{ viewedRun.size_bytes }} bytes</span>
+          </div>
+          <pre class="text-xs font-mono p-4 rounded-xl overflow-auto whitespace-pre-wrap break-all" style="background: rgba(0,0,0,0.5); color: #d4d8e8;">{{ viewedRun.content }}</pre>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
     const { createApp, reactive, ref, computed, onMounted } = Vue;
 
+    // SVG icons (lucide-style, monochrome)
+    const ICON = {
+      overview: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>',
+      wechat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+      channels: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 6 12 13 2 6"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>',
+      sources: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+      cron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+      runs: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+    };
+
     createApp({
       setup() {
-        const health = reactive({ loading: true, error: "", data: {} });
+        const activeTab = ref('overview');
+
+        const health = reactive({ loading: true, error: '', data: {} });
         const wechat = reactive({ loading: true, accounts: [] });
         const channels = reactive({ loading: true, list: [] });
-        const showAddForm = ref(false);
-        const form = reactive({
-          name: "", provider: "wechat_personal",
-          account_id: "", to: "self", url: "",
-          default_title_prefix: "",
-        });
-        const saveError = ref("");
+        const showAddChannel = ref(false);
+        const form = reactive({ name: '', provider: 'wechat_personal', account_id: '', to: 'self', url: '', default_title_prefix: '' });
+        const saveError = ref('');
         const testing = ref(null);
         const testResult = ref(null);
 
-        // ── cron state ──
+        const sources = reactive({ loading: true, list: [], includeText: '', excludeText: '', is_user_config_present: false });
+        const savingSources = ref(false);
+        const sourcesSaveResult = ref(null);
+        const KNOWN_SOURCE_IDS = ['twitter', 'zhihu', 'bilibili', 'hackernews'];
+        const isKnownSourceId = (id) => KNOWN_SOURCE_IDS.includes(id);
+
         const cron = reactive({ loading: true, list: [] });
         const showAddCron = ref(false);
         const cronForm = reactive({
-          name: "",
-          preset: "daily-at",
-          dailyTime: "17:00",
-          everyN: 1,
-          rawSchedule: "0 17 * * *",
-          prompt: "触发 ai-news-daily 技能",
-          notifyOnSuccess: true,
-          notifyOnFailure: true,
-          notifyChannel: "",
+          name: '', preset: 'daily-at', dailyTime: '17:00', everyN: 1,
+          rawSchedule: '0 17 * * *', prompt: '触发 ai-news-daily 技能',
+          notifyOnSuccess: true, notifyOnFailure: true, notifyChannel: '',
         });
-        const cronSaveError = ref("");
-        const cronAction = ref("");
-        const cronOutput = ref("");
+        const cronSaveError = ref('');
+        const cronAction = ref('');
+        const cronOutput = ref('');
+        const triggering = ref(null);
+        const triggerResult = ref(null);
+
+        const runs = reactive({ loading: true, list: [] });
+        const runStatuses = reactive({});
+        const viewedRun = ref(null);
+
+        const truncate = (s, n) => (s && s.length > n ? s.slice(0, n) + '…' : s || '');
+        const formatStarted = (iso) => iso ? iso.slice(5, 16).replace('T', ' ') : '—';
 
         const compiledSchedule = computed(() => {
-          if (cronForm.preset === "daily-at") {
-            const [h, m] = (cronForm.dailyTime || "0:0").split(":").map(s => parseInt(s, 10) || 0);
+          if (cronForm.preset === 'daily-at') {
+            const [h, m] = (cronForm.dailyTime || '0:0').split(':').map(s => parseInt(s, 10) || 0);
             return `${m} ${h} * * *`;
           }
-          if (cronForm.preset === "every-n-hours") {
-            const n = Math.max(1, parseInt(cronForm.everyN) || 1);
-            return `0 */${n} * * *`;
-          }
-          if (cronForm.preset === "every-n-minutes") {
-            const n = Math.max(1, parseInt(cronForm.everyN) || 1);
-            return `*/${n} * * * *`;
-          }
-          return cronForm.rawSchedule || "* * * * *";
+          if (cronForm.preset === 'every-n-hours') return `0 */${Math.max(1, parseInt(cronForm.everyN) || 1)} * * *`;
+          if (cronForm.preset === 'every-n-minutes') return `*/${Math.max(1, parseInt(cronForm.everyN) || 1)} * * * *`;
+          return cronForm.rawSchedule || '* * * * *';
         });
 
-        const truncate = (s, n) => (s && s.length > n ? s.slice(0, n) + "…" : s || "");
+        const setupChecklist = computed(() => {
+          const hasPrax = !!health.data.prax_on_path;
+          const hasWechat = wechat.accounts.length > 0;
+          const hasChannel = channels.list.length > 0;
+          const hasCron = cron.list.length > 0;
+          return [
+            { done: hasPrax,    label: '安装 prax CLI',     hint: '终端跑 npm install -g praxagent' },
+            { done: hasWechat,  label: '登录个人微信',       hint: '终端跑 prax wechat login 用微信扫码' },
+            { done: hasChannel, label: '配一个推送渠道',     hint: '左侧"通知渠道"屏点 + 新增' },
+            { done: hasCron,    label: '加一个定时任务',     hint: '左侧"定时任务"屏点 + 新增' },
+          ];
+        });
 
+        const tabs = computed(() => [
+          { id: 'overview', label: '概览',     icon: ICON.overview, badge: null },
+          { id: 'wechat',   label: '微信账号', icon: ICON.wechat,   badge: wechat.accounts.length || null },
+          { id: 'channels', label: '通知渠道', icon: ICON.channels, badge: channels.list.length || null },
+          { id: 'sources',  label: '抓取源',   icon: ICON.sources,  badge: sources.is_user_config_present ? '✓' : null },
+          { id: 'cron',     label: '定时任务', icon: ICON.cron,     badge: cron.list.length || null },
+          { id: 'runs',     label: '运行历史', icon: ICON.runs,     badge: runs.list.length || null },
+        ]);
+
+        // ── fetchers ──
         const fetchHealth = async () => {
           try {
-            const r = await fetch("/api/health");
+            const r = await fetch('/api/health');
             health.data = await r.json();
-          } catch (e) {
-            health.error = e.message || String(e);
-          } finally {
-            health.loading = false;
-          }
+          } catch (e) { health.error = e.message; } finally { health.loading = false; }
         };
-
         const fetchWechatAccounts = async () => {
           try {
-            const r = await fetch("/api/wechat/accounts");
-            const d = await r.json();
-            wechat.accounts = d.accounts || [];
-          } catch (e) {
-            // non-fatal — just show empty
-          } finally {
-            wechat.loading = false;
-          }
+            const r = await fetch('/api/wechat/accounts');
+            wechat.accounts = (await r.json()).accounts || [];
+          } catch {} finally { wechat.loading = false; }
         };
-
         const fetchChannels = async () => {
           channels.loading = true;
           try {
-            const r = await fetch("/api/channels");
-            const d = await r.json();
-            channels.list = d.channels || [];
-          } finally {
-            channels.loading = false;
-          }
+            const r = await fetch('/api/channels');
+            channels.list = (await r.json()).channels || [];
+          } finally { channels.loading = false; }
         };
-
-        const resetForm = () => {
-          form.name = "";
-          form.account_id = "";
-          form.to = "self";
-          form.url = "";
-          form.default_title_prefix = "";
-          saveError.value = "";
-        };
-
-        const saveChannel = async () => {
-          saveError.value = "";
-          const body = { provider: form.provider };
-          if (form.provider === "wechat_personal") {
-            if (!form.account_id) { saveError.value = "请先选 account_id"; return; }
-            body.account_id = form.account_id;
-            if (form.to) body.to = form.to;
-          } else {
-            if (!form.url) { saveError.value = "请填 webhook URL"; return; }
-            body.url = form.url;
-          }
-          if (form.default_title_prefix) body.default_title_prefix = form.default_title_prefix;
-
-          try {
-            const r = await fetch(`/api/channels/${encodeURIComponent(form.name)}`, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(body),
-            });
-            if (!r.ok) {
-              const err = await r.json();
-              saveError.value = err.detail || `HTTP ${r.status}`;
-              return;
-            }
-            resetForm();
-            showAddForm.value = false;
-            await Promise.all([fetchChannels(), fetchHealth()]);
-          } catch (e) {
-            saveError.value = e.message;
-          }
-        };
-
-        const deleteChannel = async (name) => {
-          if (!confirm(`删除渠道 "${name}"?`)) return;
-          await fetch(`/api/channels/${encodeURIComponent(name)}`, { method: "DELETE" });
-          await fetchChannels();
-        };
-
-        const testSend = async (name) => {
-          testing.value = name;
-          testResult.value = null;
-          try {
-            const r = await fetch(`/api/channels/${encodeURIComponent(name)}/test`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({}),
-            });
-            const d = await r.json();
-            testResult.value = r.ok
-              ? { ok: true, message: `✓ 测试已发到 "${name}"` }
-              : { ok: false, message: `✗ 测发失败 [${name}]: ${d.detail || r.statusText}` };
-          } catch (e) {
-            testResult.value = { ok: false, message: `✗ ${e.message}` };
-          } finally {
-            testing.value = null;
-          }
-        };
-
-        // ── sources state ──
-        const KNOWN_SOURCE_IDS = ["twitter", "zhihu", "bilibili", "hackernews"];
-        const isKnownSourceId = (id) => KNOWN_SOURCE_IDS.includes(id);
-
-        const sources = reactive({
-          loading: true,
-          list: [],
-          includeText: "",
-          excludeText: "",
-          is_user_config_present: false,
-        });
-        const savingSources = ref(false);
-        const sourcesSaveResult = ref(null);
-
         const fetchSources = async () => {
           sources.loading = true;
           try {
-            const r = await fetch("/api/sources");
+            const r = await fetch('/api/sources');
             const d = await r.json();
             sources.list = d.sources || [];
-            sources.includeText = (d.keywords?.include || []).join(", ");
-            sources.excludeText = (d.keywords?.exclude || []).join(", ");
+            sources.includeText = (d.keywords?.include || []).join(', ');
+            sources.excludeText = (d.keywords?.exclude || []).join(', ');
             sources.is_user_config_present = d.is_user_config_present;
-          } finally {
-            sources.loading = false;
-          }
+          } finally { sources.loading = false; }
         };
-
-        const saveSources = async () => {
-          savingSources.value = true;
-          sourcesSaveResult.value = null;
-          const splitTags = (s) =>
-            (s || "").split(/[,，]/).map((t) => t.trim()).filter(Boolean);
-          const payload = {
-            sources: sources.list.map((s) => ({
-              id: s.id,
-              enabled: !!s.enabled,
-              limit: parseInt(s.limit) || 10,
-              top_n: parseInt(s.top_n) || 5,
-            })),
-            keywords: {
-              include: splitTags(sources.includeText),
-              exclude: splitTags(sources.excludeText),
-            },
-          };
+        const fetchCron = async () => {
+          cron.loading = true;
           try {
-            const r = await fetch("/api/sources", {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            });
-            if (!r.ok) {
-              const err = await r.json();
-              sourcesSaveResult.value = { ok: false, message: err.detail || `HTTP ${r.status}` };
-            } else {
-              sourcesSaveResult.value = { ok: true, message: "✓ 已保存" };
-              await fetchSources();
-              await fetchHealth();
-            }
-          } catch (e) {
-            sourcesSaveResult.value = { ok: false, message: e.message };
-          } finally {
-            savingSources.value = false;
-          }
+            const r = await fetch('/api/cron');
+            cron.list = (await r.json()).jobs || [];
+          } finally { cron.loading = false; }
         };
-
-        const resetSources = async () => {
-          if (!confirm("删除 .prax/sources.yaml，恢复默认?")) return;
-          await fetch("/api/sources", { method: "DELETE" });
-          await fetchSources();
-          await fetchHealth();
-        };
-
-        // ── runs state ──
-        const runs = reactive({ loading: true, list: [] });
-        const runStatuses = reactive({});  // filename → status
-        const viewedRun = ref(null);
-
         const fetchRuns = async () => {
           runs.loading = true;
           try {
-            const r = await fetch("/api/runs");
-            const d = await r.json();
-            runs.list = d.runs || [];
-            // Lazy-load status for each visible run (top 30) in parallel
+            const r = await fetch('/api/runs');
+            runs.list = (await r.json()).runs || [];
             const visible = runs.list.slice(0, 30);
             await Promise.all(visible.map(async (rec) => {
               if (runStatuses[rec.filename] !== undefined) return;
               try {
                 const rr = await fetch(`/api/runs/${encodeURIComponent(rec.filename)}`);
-                const dd = await rr.json();
-                runStatuses[rec.filename] = dd.status;
-              } catch {
-                runStatuses[rec.filename] = "unknown";
-              }
+                runStatuses[rec.filename] = (await rr.json()).status;
+              } catch { runStatuses[rec.filename] = 'unknown'; }
             }));
-          } finally {
-            runs.loading = false;
+          } finally { runs.loading = false; }
+        };
+
+        // ── channels ──
+        const resetForm = () => { form.name = ''; form.account_id = ''; form.to = 'self'; form.url = ''; form.default_title_prefix = ''; saveError.value = ''; };
+        const saveChannel = async () => {
+          saveError.value = '';
+          const body = { provider: form.provider };
+          if (form.provider === 'wechat_personal') {
+            if (!form.account_id) { saveError.value = '请先选 account_id'; return; }
+            body.account_id = form.account_id;
+            if (form.to) body.to = form.to;
+          } else {
+            if (!form.url) { saveError.value = '请填 webhook URL'; return; }
+            body.url = form.url;
           }
+          if (form.default_title_prefix) body.default_title_prefix = form.default_title_prefix;
+          const r = await fetch(`/api/channels/${encodeURIComponent(form.name)}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          if (!r.ok) { saveError.value = (await r.json()).detail || `HTTP ${r.status}`; return; }
+          resetForm(); showAddChannel.value = false;
+          await Promise.all([fetchChannels(), fetchHealth()]);
         };
-
-        const openRun = async (filename) => {
+        const deleteChannel = async (name) => {
+          if (!confirm(`删除渠道 "${name}"?`)) return;
+          await fetch(`/api/channels/${encodeURIComponent(name)}`, { method: 'DELETE' });
+          await fetchChannels();
+        };
+        const testSend = async (name) => {
+          testing.value = name; testResult.value = null;
           try {
-            const r = await fetch(`/api/runs/${encodeURIComponent(filename)}`);
-            viewedRun.value = await r.json();
-          } catch (e) {
-            alert(`加载失败: ${e.message}`);
-          }
-        };
-
-        const formatStarted = (iso) => {
-          if (!iso) return "—";
-          // Trim seconds for display: "2026-04-25T15:00:00" → "04-25 15:00"
-          return iso.slice(5, 16).replace("T", " ");
-        };
-
-        // ── setup checklist (computed from current state) ──
-        const setupSteps = computed(() => {
-          const hasPrax = !!health.data.prax_on_path;
-          const hasWechat = wechat.accounts.length > 0;
-          const hasChannel = channels.list.length > 0;
-          const hasCron = cron.list.length > 0;
-          return {
-            prax: hasPrax,
-            wechat: hasWechat,
-            channel: hasChannel,
-            cron: hasCron,
-            allDone: hasPrax && hasWechat && hasChannel && hasCron,
-          };
-        });
-
-        // ── cron methods ──
-        const fetchCron = async () => {
-          cron.loading = true;
-          try {
-            const r = await fetch("/api/cron");
+            const r = await fetch(`/api/channels/${encodeURIComponent(name)}/test`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({}),
+            });
             const d = await r.json();
-            cron.list = d.jobs || [];
-          } finally {
-            cron.loading = false;
-          }
+            testResult.value = r.ok ? { ok: true, message: `✓ 测试已发到 "${name}"` } : { ok: false, message: `✗ ${d.detail || r.statusText}` };
+          } finally { testing.value = null; }
         };
 
-        const resetCronForm = () => {
-          cronForm.name = "";
-          cronForm.prompt = "触发 ai-news-daily 技能";
-          cronForm.notifyChannel = "";
-          cronSaveError.value = "";
-        };
-
-        const saveCronJob = async () => {
-          cronSaveError.value = "";
-          const notify_on = [];
-          if (cronForm.notifyOnSuccess) notify_on.push("success");
-          if (cronForm.notifyOnFailure) notify_on.push("failure");
-
-          const body = {
-            schedule: compiledSchedule.value,
-            prompt: cronForm.prompt,
+        // ── sources ──
+        const splitTags = (s) => (s || '').split(/[,，]/).map(t => t.trim()).filter(Boolean);
+        const saveSources = async () => {
+          savingSources.value = true; sourcesSaveResult.value = null;
+          const payload = {
+            sources: sources.list.map(s => ({ id: s.id, enabled: !!s.enabled, limit: parseInt(s.limit) || 10, top_n: parseInt(s.top_n) || 5 })),
+            keywords: { include: splitTags(sources.includeText), exclude: splitTags(sources.excludeText) },
           };
+          try {
+            const r = await fetch('/api/sources', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (r.ok) { sourcesSaveResult.value = { ok: true, message: '✓ 已保存' }; await fetchSources(); await fetchHealth(); }
+            else sourcesSaveResult.value = { ok: false, message: (await r.json()).detail || `HTTP ${r.status}` };
+          } finally { savingSources.value = false; }
+        };
+        const resetSources = async () => {
+          if (!confirm('删除 .prax/sources.yaml，恢复默认?')) return;
+          await fetch('/api/sources', { method: 'DELETE' });
+          await fetchSources(); await fetchHealth();
+        };
+
+        // ── cron ──
+        const resetCronForm = () => { cronForm.name = ''; cronForm.prompt = '触发 ai-news-daily 技能'; cronForm.notifyChannel = ''; cronSaveError.value = ''; };
+        const saveCronJob = async () => {
+          cronSaveError.value = '';
+          const notify_on = [];
+          if (cronForm.notifyOnSuccess) notify_on.push('success');
+          if (cronForm.notifyOnFailure) notify_on.push('failure');
+          const body = { schedule: compiledSchedule.value, prompt: cronForm.prompt };
           if (notify_on.length) body.notify_on = notify_on;
           if (cronForm.notifyChannel) body.notify_channel = cronForm.notifyChannel;
-
-          try {
-            const r = await fetch(`/api/cron/${encodeURIComponent(cronForm.name)}`, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(body),
-            });
-            if (!r.ok) {
-              const err = await r.json();
-              cronSaveError.value = err.detail || `HTTP ${r.status}`;
-              return;
-            }
-            resetCronForm();
-            showAddCron.value = false;
-            await Promise.all([fetchCron(), fetchHealth()]);
-          } catch (e) {
-            cronSaveError.value = e.message;
-          }
+          const r = await fetch(`/api/cron/${encodeURIComponent(cronForm.name)}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          if (!r.ok) { cronSaveError.value = (await r.json()).detail || `HTTP ${r.status}`; return; }
+          resetCronForm(); showAddCron.value = false;
+          await Promise.all([fetchCron(), fetchHealth()]);
         };
-
         const deleteCronJob = async (name) => {
           if (!confirm(`删除任务 "${name}"?`)) return;
-          await fetch(`/api/cron/${encodeURIComponent(name)}`, { method: "DELETE" });
+          await fetch(`/api/cron/${encodeURIComponent(name)}`, { method: 'DELETE' });
           await fetchCron();
         };
-
         const dispatcherAction = async (path, action) => {
-          cronAction.value = action;
-          cronOutput.value = "";
+          cronAction.value = action; cronOutput.value = '';
           try {
-            const r = await fetch(`/api/cron/${path}`, { method: "POST" });
+            const r = await fetch(`/api/cron/${path}`, { method: 'POST' });
             const d = await r.json();
-            cronOutput.value = r.ok
-              ? `✓ ${action} OK\n${d.output || ""}`
-              : `✗ ${action} 失败：${d.detail || r.statusText}`;
-            if (path === "run-once") await fetchCron();
-          } catch (e) {
-            cronOutput.value = `✗ ${e.message}`;
-          } finally {
-            cronAction.value = "";
-          }
+            cronOutput.value = r.ok ? `✓ ${action} OK\n${d.output || ''}` : `✗ ${action} 失败：${d.detail || r.statusText}`;
+            if (path === 'run-once') await fetchRuns();
+          } finally { cronAction.value = ''; }
         };
-        const installDispatcher = () => dispatcherAction("install", "install");
-        const uninstallDispatcher = () => dispatcherAction("uninstall", "uninstall");
-        const runNow = () => dispatcherAction("run-once", "run");
-
-        // Per-job force trigger — bypasses schedule check, runs the prompt
-        // directly. This is what users actually want when they click
-        // a row's "立即触发" button (vs "立刻跑一次" which respects schedule).
-        const triggering = ref(null);
-        const triggerResult = ref(null);
+        const installDispatcher = () => dispatcherAction('install', 'install');
+        const uninstallDispatcher = () => dispatcherAction('uninstall', 'uninstall');
+        const runNow = () => dispatcherAction('run-once', 'run');
         const triggerJobNow = async (name) => {
-          triggering.value = name;
-          triggerResult.value = null;
+          triggering.value = name; triggerResult.value = null;
           try {
-            const r = await fetch(`/api/cron/${encodeURIComponent(name)}/trigger-now`, {
-              method: "POST",
-            });
+            const r = await fetch(`/api/cron/${encodeURIComponent(name)}/trigger-now`, { method: 'POST' });
             const d = await r.json();
             if (r.ok) {
               triggerResult.value = {
                 ok: d.exit_code === 0,
-                headline: d.exit_code === 0
-                  ? `✓ "${name}" 触发完成 (exit 0)`
-                  : `✗ "${name}" 退出 ${d.exit_code}`,
-                tail: d.output_tail || "",
+                headline: d.exit_code === 0 ? `✓ "${name}" 触发完成 (exit 0)` : `✗ "${name}" 退出 ${d.exit_code}`,
+                tail: d.output_tail || '',
               };
             } else {
-              triggerResult.value = { ok: false, headline: `✗ ${d.detail || r.statusText}`, tail: "" };
+              triggerResult.value = { ok: false, headline: `✗ ${d.detail || r.statusText}`, tail: '' };
             }
             await fetchRuns();
-          } catch (e) {
-            triggerResult.value = { ok: false, headline: `✗ ${e.message}`, tail: "" };
-          } finally {
-            triggering.value = null;
-          }
+          } finally { triggering.value = null; }
+        };
+
+        // ── runs ──
+        const openRun = async (filename) => {
+          try {
+            const r = await fetch(`/api/runs/${encodeURIComponent(filename)}`);
+            viewedRun.value = await r.json();
+          } catch (e) { alert(`加载失败: ${e.message}`); }
         };
 
         onMounted(async () => {
@@ -950,27 +879,22 @@
         });
 
         return {
-          health, wechat, channels,
-          showAddForm, form, saveError,
-          testing, testResult,
-          truncate, resetForm, saveChannel, deleteChannel, testSend,
-          // sources
-          sources, savingSources, sourcesSaveResult,
-          isKnownSourceId, saveSources, resetSources,
-          // cron
-          cron, showAddCron, cronForm, cronSaveError,
-          cronAction, cronOutput, compiledSchedule,
+          activeTab, tabs,
+          health, wechat, channels, sources, cron, runs,
+          form, showAddChannel, saveError, testing, testResult,
+          showAddCron, cronForm, cronSaveError, cronAction, cronOutput,
+          triggering, triggerResult, runStatuses, viewedRun,
+          savingSources, sourcesSaveResult,
+          truncate, formatStarted, isKnownSourceId, compiledSchedule,
+          setupChecklist,
+          resetForm, saveChannel, deleteChannel, testSend,
+          saveSources, resetSources,
           resetCronForm, saveCronJob, deleteCronJob,
-          installDispatcher, uninstallDispatcher, runNow,
-          triggering, triggerResult, triggerJobNow,
-          // runs
-          runs, runStatuses, viewedRun,
-          fetchRuns, openRun, formatStarted,
-          // setup checklist
-          setupSteps,
+          installDispatcher, uninstallDispatcher, runNow, triggerJobNow,
+          fetchRuns, openRun,
         };
       },
-    }).mount("#app");
+    }).mount('#app');
   </script>
 </body>
 </html>

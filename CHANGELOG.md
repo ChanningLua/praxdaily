@@ -5,6 +5,53 @@ All notable changes to praxdaily will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-04-25
+
+### Changed (UI overhaul — 借鉴 openclaw-manager 设计语言)
+- **Dark glass-morphism shell** — page background is now deep blue-black
+  (#04050a) with two subtle radial-gradient auroras and a fixed
+  attachment, matching the production-grade feel of openclaw-manager's
+  edict frontend. Cards use `backdrop-filter: blur(14px) saturate(140%)`
+  with a 1px translucent border and layered shadow. CSS variables in
+  `:root` (`--bg`, `--panel`, `--ok`, `--warn`, `--danger`, `--acc`,
+  `--acc2`, `--radius-*`) drive the whole palette so theme tweaks live
+  in one place.
+- **Left sidebar navigation** — six tabs (概览 / 微信账号 / 通知渠道 /
+  抓取源 / 定时任务 / 运行历史) with monochrome lucide-style SVG icons
+  and live count badges. Replaces the previous "scroll through 7
+  stacked sections" layout. Active tab gets a blue→cyan gradient fill
+  with a stronger border.
+- **Top KPI strip** (always visible, 4 cards) — prax CLI version /
+  WeChat accounts / channel count / cron-job count, each tinted with
+  its own gradient background (blue/cyan/green/amber). One-glance
+  health.
+- **Status pills** with semantic color tokens (`pill-ok / pill-warn /
+  pill-danger / pill-acc / pill-muted`) replace plain text in tables
+  and detail panels — runs history, cron notify config, channel
+  provider all now visually distinct.
+- **Pulse animation** on pending run-status indicators while
+  background fetches resolve, mirroring openclaw's loading affordances.
+- **Scoped form styling** — `<input>` / `<select>` / `<textarea>` are
+  globally restyled to match the dark theme: translucent background,
+  brand accent on focus, 10px radius, `accent-color` for checkboxes.
+- **Modal viewer** for cron logs is now a full glass overlay with
+  backdrop blur, dark monospace `<pre>`, and a clean ✕ in the header.
+
+### Kept on purpose
+- Vue 3 + Tailwind via CDN — zero build, single HTML file. The
+  openclaw-manager 3D dispatch room and React/TypeScript/Vite
+  toolchain were intentionally NOT borrowed; they're overkill for a
+  local-tool panel.
+- All API contracts unchanged. The 5 yaml-editor screens and their
+  routes are identical to 0.5.0; only the presentation layer was
+  rewritten.
+
+### Notes
+- HTML grew from ~28KB to ~48KB (the dark theme + sidebar + tab
+  router add real content); still a single file with no external JS
+  bundle.
+- All 42 unit tests still pass — UI-only change.
+
 ## [0.5.0] - 2026-04-25
 
 ### Added
