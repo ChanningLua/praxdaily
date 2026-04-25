@@ -1,0 +1,71 @@
+[project]
+name = "praxdaily"
+version = "0.1.0"
+description = "Self-hosted AI daily digest — local web panel that wires Prax's ai-news-daily skill to WeChat"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Prax Contributors", email = "543370794@qq.com"}
+]
+keywords = ["ai-news", "daily-digest", "wechat", "obsidian", "automation", "local-first", "prax"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Chat",
+    "Topic :: Office/Business :: News/Diary",
+]
+dependencies = [
+    "praxagent >= 0.5.3 ; sys_platform != 'never'",
+    "fastapi >= 0.110",
+    "uvicorn >= 0.27",
+    "pyyaml >= 6.0",
+]
+
+# `praxagent` is published only on npm today; pip can't resolve it. The runtime
+# expects `prax` to be on PATH (npm install -g praxagent). We keep the dep
+# declared for documentation but accept it failing to resolve from PyPI.
+
+[project.urls]
+Homepage = "https://github.com/ChanningLua/praxdaily"
+Repository = "https://github.com/ChanningLua/praxdaily"
+Issues = "https://github.com/ChanningLua/praxdaily/issues"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+    "ruff>=0.5",
+]
+
+[project.scripts]
+praxdaily = "praxdaily.cli:main"
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+praxdaily = [
+    "web/*.html",
+    "web/*.js",
+    "web/*.css",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "asyncio: run test inside a local asyncio event loop",
+]

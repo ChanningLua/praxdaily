@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>praxdaily — local web panel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.4.27/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 text-gray-900">
+  <div id="app" class="max-w-3xl mx-auto p-8">
+    <header class="mb-8">
+      <h1 class="text-3xl font-bold">praxdaily</h1>
+      <p class="text-gray-500 mt-1">
+        Local web panel for Prax's ai-news-daily flagship workflow.
+      </p>
+    </header>
+
+    <section class="bg-white rounded-lg shadow-sm border p-6">
+      <h2 class="text-lg font-semibold mb-4">Health</h2>
+      <div v-if="loading" class="text-gray-400">checking…</div>
+      <div v-else-if="error" class="text-red-600">
+        <strong>error:</strong> {{ error }}
+      </div>
+      <dl v-else class="grid grid-cols-3 gap-y-2 text-sm">
+        <dt class="text-gray-500">praxdaily</dt>
+        <dd class="col-span-2 font-mono">{{ data.praxdaily_version }}</dd>
+
+        <dt class="text-gray-500">cwd</dt>
+        <dd class="col-span-2 font-mono break-all">{{ data.cwd }}</dd>
+
+        <dt class="text-gray-500">.prax/ exists</dt>
+        <dd class="col-span-2 font-mono">{{ data.prax_dir_exists ? 'yes' : 'no' }}</dd>
+
+        <dt class="text-gray-500">prax CLI</dt>
+        <dd class="col-span-2 font-mono">
+          <span v-if="data.prax_on_path">
+            {{ data.prax_version || data.prax_on_path }}
+          </span>
+          <span v-else class="text-red-600">
+            not found — run <code class="bg-gray-100 px-1 rounded">npm install -g praxagent</code>
+          </span>
+        </dd>
+      </dl>
+    </section>
+
+    <p class="mt-8 text-xs text-gray-400">
+      0.1.0 milestone: this is the scaffolding. The five real screens
+      (sources / schedule / channels / runs / setup) land in 0.2.x as the
+      API contract gets implemented.
+    </p>
+  </div>
+
+  <script>
+    const { createApp, ref, onMounted } = Vue;
+
+    createApp({
+      setup() {
+        const loading = ref(true);
+        const error = ref("");
+        const data = ref({});
+
+        const fetchHealth = async () => {
+          try {
+            const resp = await fetch("/api/health");
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            data.value = await resp.json();
+          } catch (e) {
+            error.value = e.message || String(e);
+          } finally {
+            loading.value = false;
+          }
+        };
+
+        onMounted(fetchHealth);
+        return { loading, error, data };
+      },
+    }).mount("#app");
+  </script>
+</body>
+</html>
