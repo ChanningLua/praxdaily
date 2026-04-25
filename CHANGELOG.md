@@ -5,6 +5,36 @@ All notable changes to praxdaily will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-25
+
+### Added
+- **Schedule screen** — list / add / delete cron jobs without touching
+  `.prax/cron.yaml`. Frequency is picked from four presets (every day at
+  HH:MM, every N hours, every N minutes, raw cron expression) that
+  compile down to the same 5-field cron string `prax cron` consumes,
+  with a live "将编译为：…" preview so users see what they're saving.
+- **Dispatcher control** — Install / Uninstall / "立刻跑一次" buttons
+  call `prax cron install / uninstall / run`, surfacing the CLI's
+  output in a small log box. Install writes a LaunchAgent on macOS or
+  a crontab line on Linux; uninstall reverses it.
+- **Notify wiring in form** — when adding a job, the notify-channel
+  dropdown is populated from the channels saved in 0.2.0, so wiring
+  "every day at 17:00 → push to my-wechat" is two clicks.
+- **API contract**: `GET/PUT/DELETE /api/cron[/{name}]`,
+  `POST /api/cron/{install,uninstall,run-once}`. Test send + dispatcher
+  control all shell out to the `prax` CLI to avoid duplicating
+  scheduler / LaunchAgent / crontab logic.
+
+### Fixed
+- **Channel-name placeholder UX gap** (0.2.0 surfaced this in beta):
+  the placeholder text "my-wechat" looked like a real value, leading
+  users to click Save with an empty name. The label now ends with a
+  red `*`, and the placeholder explicitly says "这只是提示，请实际输入".
+
+### Notes
+- Tests: 21 unit tests (was 11). The new 10 cover cron CRUD + name
+  validation + dispatcher shell-out arg shapes (subprocess is patched).
+
 ## [0.2.0] - 2026-04-25
 
 ### Added

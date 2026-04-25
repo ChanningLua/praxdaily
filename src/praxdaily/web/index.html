@@ -85,8 +85,14 @@
       <!-- Add channel form -->
       <div v-if="showAddForm" class="mb-6 bg-gray-50 border rounded p-4 space-y-3">
         <div class="grid grid-cols-3 gap-2">
-          <label class="text-sm text-gray-600 col-span-1 self-center">渠道名</label>
-          <input v-model="form.name" placeholder="my-wechat" class="col-span-2 border rounded px-2 py-1 text-sm font-mono" />
+          <label class="text-sm text-gray-600 col-span-1 self-center">
+            渠道名 <span class="text-red-500">*</span>
+          </label>
+          <input
+            v-model="form.name"
+            placeholder="例：my-wechat（这只是提示，请实际输入）"
+            class="col-span-2 border rounded px-2 py-1 text-sm font-mono"
+          />
         </div>
         <div class="grid grid-cols-3 gap-2">
           <label class="text-sm text-gray-600 col-span-1 self-center">Provider</label>
@@ -179,13 +185,167 @@
       </div>
     </section>
 
+    <!-- ── Schedule ─────────────────────────────────────────── -->
+    <section class="bg-white rounded-lg shadow-sm border p-6">
+      <div class="flex justify-between items-start mb-4">
+        <div>
+          <h2 class="text-lg font-semibold">定时任务</h2>
+          <p class="text-sm text-gray-500 mt-1">
+            任务写在
+            <code class="bg-gray-100 px-1 rounded">.prax/cron.yaml</code>。
+            到点 <code class="bg-gray-100 px-1 rounded">prax cron</code> 调度器自动跑，
+            完成后按上面渠道推。
+          </p>
+        </div>
+        <div class="space-x-2">
+          <button
+            @click="runNow"
+            :disabled="cronAction === 'run'"
+            class="text-sm px-3 py-2 rounded border hover:bg-gray-50 disabled:opacity-50"
+          >{{ cronAction === 'run' ? '触发中…' : '立刻跑一次' }}</button>
+          <button
+            @click="showAddCron = !showAddCron"
+            class="bg-gray-900 text-white text-sm px-3 py-2 rounded hover:bg-gray-700"
+          >{{ showAddCron ? '取消' : '+ 新增任务' }}</button>
+        </div>
+      </div>
+
+      <!-- Dispatcher install/uninstall -->
+      <div class="bg-blue-50 border border-blue-100 rounded p-3 mb-4 text-sm">
+        <p class="text-blue-800 font-medium mb-1">系统调度器（macOS LaunchAgent / Linux crontab）</p>
+        <p class="text-blue-700 text-xs mb-2">
+          安装后系统每分钟唤醒一次，跑所有到期的任务。卸载后只能手动 "立刻跑一次"。
+        </p>
+        <div class="flex gap-2">
+          <button
+            @click="installDispatcher"
+            :disabled="cronAction === 'install'"
+            class="bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
+          >{{ cronAction === 'install' ? '安装中…' : 'Install dispatcher' }}</button>
+          <button
+            @click="uninstallDispatcher"
+            :disabled="cronAction === 'uninstall'"
+            class="border border-blue-300 text-blue-700 text-xs px-3 py-1 rounded hover:bg-blue-100 disabled:opacity-50"
+          >{{ cronAction === 'uninstall' ? '卸载中…' : 'Uninstall' }}</button>
+        </div>
+        <div v-if="cronOutput" class="mt-2 text-xs font-mono bg-white border rounded p-2 whitespace-pre-wrap">{{ cronOutput }}</div>
+      </div>
+
+      <!-- Add cron job form -->
+      <div v-if="showAddCron" class="mb-6 bg-gray-50 border rounded p-4 space-y-3">
+        <div class="grid grid-cols-3 gap-2">
+          <label class="text-sm text-gray-600 col-span-1 self-center">任务名 <span class="text-red-500">*</span></label>
+          <input v-model="cronForm.name" placeholder="例：daily-news（请实际输入）" class="col-span-2 border rounded px-2 py-1 text-sm font-mono" />
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <label class="text-sm text-gray-600 col-span-1 self-center">频率</label>
+          <div class="col-span-2 space-y-2">
+            <select v-model="cronForm.preset" class="w-full border rounded px-2 py-1 text-sm">
+              <option value="daily-at">每天 X 点 X 分</option>
+              <option value="every-n-hours">每隔 N 小时</option>
+              <option value="every-n-minutes">每隔 N 分钟（调试用）</option>
+              <option value="custom">自定义 cron 表达式</option>
+            </select>
+
+            <template v-if="cronForm.preset === 'daily-at'">
+              <input v-model="cronForm.dailyTime" type="time" class="border rounded px-2 py-1 text-sm" />
+            </template>
+            <template v-else-if="cronForm.preset === 'every-n-hours'">
+              <div class="flex items-center gap-2 text-sm">
+                每隔 <input v-model.number="cronForm.everyN" type="number" min="1" max="23" class="border rounded px-2 py-1 w-16" /> 小时
+              </div>
+            </template>
+            <template v-else-if="cronForm.preset === 'every-n-minutes'">
+              <div class="flex items-center gap-2 text-sm">
+                每隔 <input v-model.number="cronForm.everyN" type="number" min="1" max="59" class="border rounded px-2 py-1 w-16" /> 分钟
+              </div>
+            </template>
+            <template v-else>
+              <input v-model="cronForm.rawSchedule" placeholder="0 17 * * *" class="border rounded px-2 py-1 text-sm font-mono w-full" />
+            </template>
+
+            <p class="text-xs text-gray-500 font-mono">将编译为：{{ compiledSchedule }}</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <label class="text-sm text-gray-600 col-span-1 pt-2">Prompt <span class="text-red-500">*</span></label>
+          <textarea
+            v-model="cronForm.prompt"
+            rows="3"
+            placeholder="触发 ai-news-daily 技能"
+            class="col-span-2 border rounded px-2 py-1 text-sm font-mono"
+          ></textarea>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <label class="text-sm text-gray-600 col-span-1 self-center">通知</label>
+          <div class="col-span-2 flex items-center gap-3 text-sm">
+            <label class="flex items-center gap-1">
+              <input type="checkbox" v-model="cronForm.notifyOnSuccess" /> 成功
+            </label>
+            <label class="flex items-center gap-1">
+              <input type="checkbox" v-model="cronForm.notifyOnFailure" /> 失败
+            </label>
+            →
+            <select v-model="cronForm.notifyChannel" class="border rounded px-2 py-1 text-sm">
+              <option value="">— 不发通知 —</option>
+              <option v-for="ch in channels.list" :key="ch.name" :value="ch.name">{{ ch.name }} ({{ ch.provider }})</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button @click="resetCronForm" class="text-sm text-gray-600 px-3 py-1">清空</button>
+          <button
+            @click="saveCronJob"
+            :disabled="!cronForm.name || !cronForm.prompt"
+            class="bg-blue-600 text-white text-sm px-4 py-1 rounded disabled:opacity-50 hover:bg-blue-700"
+          >保存</button>
+        </div>
+        <div v-if="cronSaveError" class="text-red-600 text-sm">{{ cronSaveError }}</div>
+      </div>
+
+      <!-- Cron jobs list -->
+      <div v-if="cron.loading" class="text-gray-400 text-sm">加载…</div>
+      <div v-else-if="cron.list.length === 0" class="text-sm text-gray-500">
+        没有任务。点上方"新增任务"添加第一个。
+      </div>
+      <table v-else class="w-full text-sm">
+        <thead>
+          <tr class="border-b text-left text-gray-500">
+            <th class="py-2">name</th>
+            <th>schedule</th>
+            <th>notify</th>
+            <th>prompt</th>
+            <th class="text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="j in cron.list" :key="j.name" class="border-b last:border-0">
+            <td class="py-2 font-mono">{{ j.name }}</td>
+            <td class="text-xs font-mono">{{ j.schedule }}</td>
+            <td class="text-xs text-gray-600">
+              <span v-if="j.notify_channel">{{ (j.notify_on || []).join(',') || '—' }} → {{ j.notify_channel }}</span>
+              <span v-else class="text-gray-400">—</span>
+            </td>
+            <td class="text-xs text-gray-500 truncate max-w-xs">{{ truncate(j.prompt, 40) }}</td>
+            <td class="text-right">
+              <button @click="deleteCronJob(j.name)" class="text-xs text-red-600 hover:underline">删除</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <p class="text-xs text-gray-400 text-center pt-4">
-      praxdaily 0.2.0 · Schedule / Sources / Runs 屏即将到来
+      praxdaily 0.3.0 · Sources / Runs 屏即将到来
     </p>
   </div>
 
   <script>
-    const { createApp, reactive, ref, onMounted } = Vue;
+    const { createApp, reactive, ref, computed, onMounted } = Vue;
 
     createApp({
       setup() {
@@ -201,6 +361,40 @@
         const saveError = ref("");
         const testing = ref(null);
         const testResult = ref(null);
+
+        // ── cron state ──
+        const cron = reactive({ loading: true, list: [] });
+        const showAddCron = ref(false);
+        const cronForm = reactive({
+          name: "",
+          preset: "daily-at",
+          dailyTime: "17:00",
+          everyN: 1,
+          rawSchedule: "0 17 * * *",
+          prompt: "触发 ai-news-daily 技能",
+          notifyOnSuccess: true,
+          notifyOnFailure: true,
+          notifyChannel: "",
+        });
+        const cronSaveError = ref("");
+        const cronAction = ref("");
+        const cronOutput = ref("");
+
+        const compiledSchedule = computed(() => {
+          if (cronForm.preset === "daily-at") {
+            const [h, m] = (cronForm.dailyTime || "0:0").split(":").map(s => parseInt(s, 10) || 0);
+            return `${m} ${h} * * *`;
+          }
+          if (cronForm.preset === "every-n-hours") {
+            const n = Math.max(1, parseInt(cronForm.everyN) || 1);
+            return `0 */${n} * * *`;
+          }
+          if (cronForm.preset === "every-n-minutes") {
+            const n = Math.max(1, parseInt(cronForm.everyN) || 1);
+            return `*/${n} * * * *`;
+          }
+          return cronForm.rawSchedule || "* * * * *";
+        });
 
         const truncate = (s, n) => (s && s.length > n ? s.slice(0, n) + "…" : s || "");
 
@@ -305,8 +499,85 @@
           }
         };
 
+        // ── cron methods ──
+        const fetchCron = async () => {
+          cron.loading = true;
+          try {
+            const r = await fetch("/api/cron");
+            const d = await r.json();
+            cron.list = d.jobs || [];
+          } finally {
+            cron.loading = false;
+          }
+        };
+
+        const resetCronForm = () => {
+          cronForm.name = "";
+          cronForm.prompt = "触发 ai-news-daily 技能";
+          cronForm.notifyChannel = "";
+          cronSaveError.value = "";
+        };
+
+        const saveCronJob = async () => {
+          cronSaveError.value = "";
+          const notify_on = [];
+          if (cronForm.notifyOnSuccess) notify_on.push("success");
+          if (cronForm.notifyOnFailure) notify_on.push("failure");
+
+          const body = {
+            schedule: compiledSchedule.value,
+            prompt: cronForm.prompt,
+          };
+          if (notify_on.length) body.notify_on = notify_on;
+          if (cronForm.notifyChannel) body.notify_channel = cronForm.notifyChannel;
+
+          try {
+            const r = await fetch(`/api/cron/${encodeURIComponent(cronForm.name)}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+            if (!r.ok) {
+              const err = await r.json();
+              cronSaveError.value = err.detail || `HTTP ${r.status}`;
+              return;
+            }
+            resetCronForm();
+            showAddCron.value = false;
+            await fetchCron();
+          } catch (e) {
+            cronSaveError.value = e.message;
+          }
+        };
+
+        const deleteCronJob = async (name) => {
+          if (!confirm(`删除任务 "${name}"?`)) return;
+          await fetch(`/api/cron/${encodeURIComponent(name)}`, { method: "DELETE" });
+          await fetchCron();
+        };
+
+        const dispatcherAction = async (path, action) => {
+          cronAction.value = action;
+          cronOutput.value = "";
+          try {
+            const r = await fetch(`/api/cron/${path}`, { method: "POST" });
+            const d = await r.json();
+            cronOutput.value = r.ok
+              ? `✓ ${action} OK\n${d.output || ""}`
+              : `✗ ${action} 失败：${d.detail || r.statusText}`;
+            if (path === "run-once") await fetchCron();
+          } catch (e) {
+            cronOutput.value = `✗ ${e.message}`;
+          } finally {
+            cronAction.value = "";
+          }
+        };
+        const installDispatcher = () => dispatcherAction("install", "install");
+        const uninstallDispatcher = () => dispatcherAction("uninstall", "uninstall");
+        const runNow = () => dispatcherAction("run-once", "run");
+
         onMounted(async () => {
-          await Promise.all([fetchHealth(), fetchWechatAccounts(), fetchChannels()]);
+          await Promise.all([fetchHealth(), fetchWechatAccounts(), fetchChannels(), fetchCron()]);
         });
 
         return {
@@ -314,6 +585,11 @@
           showAddForm, form, saveError,
           testing, testResult,
           truncate, resetForm, saveChannel, deleteChannel, testSend,
+          // cron
+          cron, showAddCron, cronForm, cronSaveError,
+          cronAction, cronOutput, compiledSchedule,
+          resetCronForm, saveCronJob, deleteCronJob,
+          installDispatcher, uninstallDispatcher, runNow,
         };
       },
     }).mount("#app");

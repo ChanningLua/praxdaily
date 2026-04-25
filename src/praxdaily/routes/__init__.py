@@ -6,6 +6,7 @@ and makes per-route tests obvious.
 """
 
 from .channels import router as channels_router
+from .cron import router as cron_router
 from .wechat import router as wechat_router
 
-__all__ = ["channels_router", "wechat_router"]
+__all__ = ["channels_router", "cron_router", "wechat_router"]
