@@ -230,6 +230,77 @@
       </div>
     </section>
 
+    <!-- ── Sources (ai-news-daily 抓什么) ──────────────────── -->
+    <section class="bg-white rounded-lg shadow-sm border p-6">
+      <div class="flex justify-between items-start mb-4">
+        <div>
+          <h2 class="text-lg font-semibold">抓取源 · ai-news-daily</h2>
+          <p class="text-sm text-gray-500 mt-1">
+            写到 <code class="bg-gray-100 px-1 rounded">.prax/sources.yaml</code>。
+            skill 跑时按这里的勾选 + 上限抓数据；不存在文件就用默认值。
+          </p>
+        </div>
+        <div class="space-x-2 text-sm">
+          <button @click="resetSources" class="text-xs text-gray-500 hover:underline">恢复默认</button>
+        </div>
+      </div>
+
+      <div v-if="sources.loading" class="text-sm text-gray-400">加载…</div>
+      <div v-else>
+        <table class="w-full text-sm mb-4">
+          <thead>
+            <tr class="border-b text-left text-gray-500">
+              <th class="py-2 w-12"></th>
+              <th>source</th>
+              <th>抓取 limit</th>
+              <th>过滤后 top_n</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(s, i) in sources.list" :key="s.id" class="border-b last:border-0">
+              <td class="py-2"><input type="checkbox" v-model="s.enabled" /></td>
+              <td class="font-mono">
+                {{ s.id }}
+                <span v-if="!isKnownSourceId(s.id)" class="text-xs text-orange-600 ml-2">
+                  (skill 暂不映射此 id, 会跳过)
+                </span>
+              </td>
+              <td><input type="number" v-model.number="s.limit" min="1" max="1000" class="border rounded px-2 py-1 w-20 text-xs font-mono" /></td>
+              <td><input type="number" v-model.number="s.top_n" min="1" :max="s.limit" class="border rounded px-2 py-1 w-20 text-xs font-mono" /></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="space-y-3 mb-4">
+          <div>
+            <label class="text-sm text-gray-600 block mb-1">关键词 · include（命中其一才保留）</label>
+            <input v-model="sources.includeText" placeholder="逗号分隔，例：AI, LLM, GPT, agent" class="w-full border rounded px-2 py-1 text-sm font-mono" />
+          </div>
+          <div>
+            <label class="text-sm text-gray-600 block mb-1">关键词 · exclude（命中任一就丢弃，可留空）</label>
+            <input v-model="sources.excludeText" placeholder="逗号分隔，例：广告, 推广" class="w-full border rounded px-2 py-1 text-sm font-mono" />
+          </div>
+        </div>
+
+        <div class="flex justify-between items-center pt-2 border-t">
+          <p class="text-xs text-gray-500">
+            <span v-if="sources.is_user_config_present" class="text-green-700">✓ .prax/sources.yaml 已自定义</span>
+            <span v-else class="text-gray-500">○ 还在用默认值（无文件）</span>
+          </p>
+          <div>
+            <span v-if="sourcesSaveResult" class="text-xs mr-3" :class="sourcesSaveResult.ok ? 'text-green-600' : 'text-red-600'">
+              {{ sourcesSaveResult.message }}
+            </span>
+            <button
+              @click="saveSources"
+              :disabled="savingSources"
+              class="bg-blue-600 text-white text-sm px-4 py-1 rounded disabled:opacity-50 hover:bg-blue-700"
+            >{{ savingSources ? '保存中…' : '保存' }}</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ── Schedule ─────────────────────────────────────────── -->
     <section class="bg-white rounded-lg shadow-sm border p-6">
       <div class="flex justify-between items-start mb-4">
@@ -631,6 +702,79 @@
           }
         };
 
+        // ── sources state ──
+        const KNOWN_SOURCE_IDS = ["twitter", "zhihu", "bilibili", "hackernews"];
+        const isKnownSourceId = (id) => KNOWN_SOURCE_IDS.includes(id);
+
+        const sources = reactive({
+          loading: true,
+          list: [],
+          includeText: "",
+          excludeText: "",
+          is_user_config_present: false,
+        });
+        const savingSources = ref(false);
+        const sourcesSaveResult = ref(null);
+
+        const fetchSources = async () => {
+          sources.loading = true;
+          try {
+            const r = await fetch("/api/sources");
+            const d = await r.json();
+            sources.list = d.sources || [];
+            sources.includeText = (d.keywords?.include || []).join(", ");
+            sources.excludeText = (d.keywords?.exclude || []).join(", ");
+            sources.is_user_config_present = d.is_user_config_present;
+          } finally {
+            sources.loading = false;
+          }
+        };
+
+        const saveSources = async () => {
+          savingSources.value = true;
+          sourcesSaveResult.value = null;
+          const splitTags = (s) =>
+            (s || "").split(/[,，]/).map((t) => t.trim()).filter(Boolean);
+          const payload = {
+            sources: sources.list.map((s) => ({
+              id: s.id,
+              enabled: !!s.enabled,
+              limit: parseInt(s.limit) || 10,
+              top_n: parseInt(s.top_n) || 5,
+            })),
+            keywords: {
+              include: splitTags(sources.includeText),
+              exclude: splitTags(sources.excludeText),
+            },
+          };
+          try {
+            const r = await fetch("/api/sources", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            if (!r.ok) {
+              const err = await r.json();
+              sourcesSaveResult.value = { ok: false, message: err.detail || `HTTP ${r.status}` };
+            } else {
+              sourcesSaveResult.value = { ok: true, message: "✓ 已保存" };
+              await fetchSources();
+              await fetchHealth();
+            }
+          } catch (e) {
+            sourcesSaveResult.value = { ok: false, message: e.message };
+          } finally {
+            savingSources.value = false;
+          }
+        };
+
+        const resetSources = async () => {
+          if (!confirm("删除 .prax/sources.yaml，恢复默认?")) return;
+          await fetch("/api/sources", { method: "DELETE" });
+          await fetchSources();
+          await fetchHealth();
+        };
+
         // ── runs state ──
         const runs = reactive({ loading: true, list: [] });
         const runStatuses = reactive({});  // filename → status
@@ -801,7 +945,7 @@
         onMounted(async () => {
           await Promise.all([
             fetchHealth(), fetchWechatAccounts(), fetchChannels(),
-            fetchCron(), fetchRuns(),
+            fetchSources(), fetchCron(), fetchRuns(),
           ]);
         });
 
@@ -810,6 +954,9 @@
           showAddForm, form, saveError,
           testing, testResult,
           truncate, resetForm, saveChannel, deleteChannel, testSend,
+          // sources
+          sources, savingSources, sourcesSaveResult,
+          isKnownSourceId, saveSources, resetSources,
           // cron
           cron, showAddCron, cronForm, cronSaveError,
           cronAction, cronOutput, compiledSchedule,

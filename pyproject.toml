@@ -1,6 +1,6 @@
 [project]
 name = "praxdaily"
-version = "0.4.1"
+version = "0.5.0"
 description = "Self-hosted AI daily digest — local web panel that wires Prax's ai-news-daily skill to WeChat"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,7 +21,7 @@ classifiers = [
     "Topic :: Office/Business :: News/Diary",
 ]
 dependencies = [
-    "praxagent >= 0.5.3 ; sys_platform != 'never'",
+    "praxagent >= 0.5.4 ; sys_platform != 'never'",
     "fastapi >= 0.110",
     "uvicorn >= 0.27",
     "pyyaml >= 6.0",

@@ -5,6 +5,35 @@ All notable changes to praxdaily will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-04-25
+
+### Added
+- **Sources screen** — manage which platforms `ai-news-daily` scrapes,
+  per-source `limit` / `top_n`, and the keyword include/exclude
+  filters. Writes to `<cwd>/.prax/sources.yaml`. Pairs with the
+  contract that landed in praxagent **0.5.4** — the skill loads this
+  file (or its DEFAULTS) at Step 1.5.
+- **API contract**: `GET / PUT / DELETE /api/sources`. GET layers
+  user values over DEFAULTS so the table always shows the full shape
+  even when no file exists. PUT validates `top_n ≤ limit`, rejects
+  duplicate ids, strips blank tag strings. DELETE removes the file
+  so the skill falls back to baked-in defaults.
+- **Forward compat**: unknown source ids (e.g. `weibo` if the user
+  adds one) are preserved through write/read with a small "skill
+  暂不映射此 id, 会跳过" hint in the UI.
+
+### Required runtime
+Bumps the praxagent peer requirement to `>=0.5.4` because that's
+where the SKILL.md contract lives.
+
+### Notes
+- Tests: 42 unit (was 34). +8 cover GET defaults, PUT yaml shape,
+  layered GET-after-PUT, duplicate-id reject, top_n>limit reject,
+  blank-tag stripping, DELETE reset, and unknown-id preservation.
+- This closes the original 5-screen plan. praxdaily 0.5.x is now
+  feature-complete for the Phase 1 scope; next milestone is Phase 2
+  (招 5-10 个 beta 用户) and Phase 3 (公众号 / 小红书 案例化传播).
+
 ## [0.4.1] - 2026-04-25
 
 ### Fixed (UX gaps from self-test)

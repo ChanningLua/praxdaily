@@ -32,10 +32,13 @@ def create_app(cwd: Path) -> FastAPI:
     app.state.cwd = cwd
 
     # Mount API route modules.
-    from .routes import channels_router, cron_router, runs_router, wechat_router
+    from .routes import (
+        channels_router, cron_router, runs_router, sources_router, wechat_router,
+    )
     app.include_router(channels_router)
     app.include_router(cron_router)
     app.include_router(runs_router)
+    app.include_router(sources_router)
     app.include_router(wechat_router)
 
     @app.get("/api/health")
