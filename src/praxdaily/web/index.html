@@ -14,6 +14,44 @@
       <p class="text-gray-500 mt-1">本地 AI 信息助理面板。</p>
     </header>
 
+    <!-- ── Quick Setup checklist ─────────────────────────────── -->
+    <section class="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-lg p-5">
+      <h2 class="text-base font-semibold text-blue-900 mb-3">快速上手 · 4 步</h2>
+      <ol class="space-y-2 text-sm">
+        <li :class="setupSteps.prax ? 'text-green-700' : 'text-gray-700'">
+          <span class="font-mono">{{ setupSteps.prax ? '✓' : '○' }}</span>
+          1. 安装 prax CLI
+          <span v-if="!setupSteps.prax" class="text-xs text-gray-500">
+            — 终端跑 <code class="bg-white px-1 rounded">npm install -g praxagent</code>
+          </span>
+        </li>
+        <li :class="setupSteps.wechat ? 'text-green-700' : 'text-gray-700'">
+          <span class="font-mono">{{ setupSteps.wechat ? '✓' : '○' }}</span>
+          2. 登录个人微信
+          <span v-if="!setupSteps.wechat" class="text-xs text-gray-500">
+            — 终端跑 <code class="bg-white px-1 rounded">prax wechat login</code> 用微信扫码
+          </span>
+        </li>
+        <li :class="setupSteps.channel ? 'text-green-700' : 'text-gray-700'">
+          <span class="font-mono">{{ setupSteps.channel ? '✓' : '○' }}</span>
+          3. 配一个推送渠道
+          <span v-if="!setupSteps.channel" class="text-xs text-gray-500">
+            — 下方"通知渠道"区点 + 新增
+          </span>
+        </li>
+        <li :class="setupSteps.cron ? 'text-green-700' : 'text-gray-700'">
+          <span class="font-mono">{{ setupSteps.cron ? '✓' : '○' }}</span>
+          4. 加一个定时任务
+          <span v-if="!setupSteps.cron" class="text-xs text-gray-500">
+            — 下方"定时任务"区点 + 新增
+          </span>
+        </li>
+      </ol>
+      <p v-if="setupSteps.allDone" class="mt-3 text-sm text-green-700 font-medium">
+        ✓ 全部就绪。点定时任务区的"立刻跑一次"立即触发，运行历史会出现在最下方。
+      </p>
+    </section>
+
     <!-- ── Health ───────────────────────────────────────────── -->
     <section class="bg-white rounded-lg shadow-sm border p-6">
       <h2 class="text-lg font-semibold mb-4">运行状态</h2>
@@ -339,8 +377,84 @@
       </table>
     </section>
 
+    <!-- ── Runs history ────────────────────────────────────── -->
+    <section class="bg-white rounded-lg shadow-sm border p-6">
+      <div class="flex justify-between items-start mb-4">
+        <div>
+          <h2 class="text-lg font-semibold">运行历史</h2>
+          <p class="text-sm text-gray-500 mt-1">
+            cron 调度器每跑一次，日志写到
+            <code class="bg-gray-100 px-1 rounded">.prax/logs/cron/&lt;name&gt;-&lt;ts&gt;.log</code>。
+            按时间倒序最近 30 条。
+          </p>
+        </div>
+        <button @click="fetchRuns" class="text-sm border rounded px-3 py-1 hover:bg-gray-50">刷新</button>
+      </div>
+
+      <div v-if="runs.loading" class="text-gray-400 text-sm">加载…</div>
+      <div v-else-if="runs.list.length === 0" class="text-sm text-gray-500">
+        还没有运行记录。点上方"立刻跑一次"或等定时任务到点。
+      </div>
+      <table v-else class="w-full text-sm">
+        <thead>
+          <tr class="border-b text-left text-gray-500">
+            <th class="py-2">job</th>
+            <th>时间</th>
+            <th>状态</th>
+            <th>大小</th>
+            <th class="text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="r in runs.list.slice(0, 30)"
+            :key="r.filename"
+            class="border-b last:border-0 hover:bg-gray-50 cursor-pointer"
+            @click="openRun(r.filename)"
+          >
+            <td class="py-2 font-mono">{{ r.name }}</td>
+            <td class="text-xs font-mono">{{ formatStarted(r.started_at) }}</td>
+            <td class="text-xs">
+              <span v-if="runStatuses[r.filename] === 'success'" class="text-green-600">✓ success</span>
+              <span v-else-if="runStatuses[r.filename] === 'failure'" class="text-red-600">✗ failure</span>
+              <span v-else class="text-gray-400">—</span>
+            </td>
+            <td class="text-xs text-gray-500">{{ r.size_bytes }} B</td>
+            <td class="text-right text-xs text-blue-600">查看</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Run viewer modal -->
+      <div
+        v-if="viewedRun"
+        class="fixed inset-0 bg-black/40 flex items-center justify-center p-8 z-50"
+        @click.self="viewedRun = null"
+      >
+        <div class="bg-white rounded-lg shadow-lg max-w-3xl w-full max-h-[80vh] flex flex-col">
+          <div class="flex justify-between items-center border-b p-4">
+            <div>
+              <h3 class="font-semibold font-mono">{{ viewedRun.name }}</h3>
+              <p class="text-xs text-gray-500 font-mono">{{ viewedRun.filename }}</p>
+            </div>
+            <button @click="viewedRun = null" class="text-gray-400 hover:text-gray-600">✕</button>
+          </div>
+          <div class="p-4 overflow-auto">
+            <p class="text-xs mb-2">
+              status:
+              <span v-if="viewedRun.status === 'success'" class="text-green-600 font-mono">success</span>
+              <span v-else-if="viewedRun.status === 'failure'" class="text-red-600 font-mono">failure</span>
+              <span v-else class="text-gray-400 font-mono">unknown</span>
+              · {{ viewedRun.size_bytes }} bytes
+            </p>
+            <pre class="bg-gray-900 text-gray-100 text-xs font-mono p-3 rounded overflow-auto whitespace-pre-wrap break-all">{{ viewedRun.content }}</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <p class="text-xs text-gray-400 text-center pt-4">
-      praxdaily 0.3.0 · Sources / Runs 屏即将到来
+      praxdaily 0.4.0 · 五屏齐了；下一步进 Phase 2（招 5-10 个 beta 用户）
     </p>
   </div>
 
@@ -499,6 +613,64 @@
           }
         };
 
+        // ── runs state ──
+        const runs = reactive({ loading: true, list: [] });
+        const runStatuses = reactive({});  // filename → status
+        const viewedRun = ref(null);
+
+        const fetchRuns = async () => {
+          runs.loading = true;
+          try {
+            const r = await fetch("/api/runs");
+            const d = await r.json();
+            runs.list = d.runs || [];
+            // Lazy-load status for each visible run (top 30) in parallel
+            const visible = runs.list.slice(0, 30);
+            await Promise.all(visible.map(async (rec) => {
+              if (runStatuses[rec.filename] !== undefined) return;
+              try {
+                const rr = await fetch(`/api/runs/${encodeURIComponent(rec.filename)}`);
+                const dd = await rr.json();
+                runStatuses[rec.filename] = dd.status;
+              } catch {
+                runStatuses[rec.filename] = "unknown";
+              }
+            }));
+          } finally {
+            runs.loading = false;
+          }
+        };
+
+        const openRun = async (filename) => {
+          try {
+            const r = await fetch(`/api/runs/${encodeURIComponent(filename)}`);
+            viewedRun.value = await r.json();
+          } catch (e) {
+            alert(`加载失败: ${e.message}`);
+          }
+        };
+
+        const formatStarted = (iso) => {
+          if (!iso) return "—";
+          // Trim seconds for display: "2026-04-25T15:00:00" → "04-25 15:00"
+          return iso.slice(5, 16).replace("T", " ");
+        };
+
+        // ── setup checklist (computed from current state) ──
+        const setupSteps = computed(() => {
+          const hasPrax = !!health.data.prax_on_path;
+          const hasWechat = wechat.accounts.length > 0;
+          const hasChannel = channels.list.length > 0;
+          const hasCron = cron.list.length > 0;
+          return {
+            prax: hasPrax,
+            wechat: hasWechat,
+            channel: hasChannel,
+            cron: hasCron,
+            allDone: hasPrax && hasWechat && hasChannel && hasCron,
+          };
+        });
+
         // ── cron methods ──
         const fetchCron = async () => {
           cron.loading = true;
@@ -577,7 +749,10 @@
         const runNow = () => dispatcherAction("run-once", "run");
 
         onMounted(async () => {
-          await Promise.all([fetchHealth(), fetchWechatAccounts(), fetchChannels(), fetchCron()]);
+          await Promise.all([
+            fetchHealth(), fetchWechatAccounts(), fetchChannels(),
+            fetchCron(), fetchRuns(),
+          ]);
         });
 
         return {
@@ -590,6 +765,11 @@
           cronAction, cronOutput, compiledSchedule,
           resetCronForm, saveCronJob, deleteCronJob,
           installDispatcher, uninstallDispatcher, runNow,
+          // runs
+          runs, runStatuses, viewedRun,
+          fetchRuns, openRun, formatStarted,
+          // setup checklist
+          setupSteps,
         };
       },
     }).mount("#app");

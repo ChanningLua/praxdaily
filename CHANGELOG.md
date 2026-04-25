@@ -5,6 +5,37 @@ All notable changes to praxdaily will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-25
+
+### Added
+- **Runs history screen** — table of all `.prax/logs/cron/*.log` newest
+  first, click a row to open a modal with the full log content. Status
+  (`success` / `failure`) is inferred from log markers (LLM connection
+  errors, Python tracebacks, etc.) so users get a quick visual signal
+  without opening every file.
+- **Quick Setup checklist** — top of the panel shows a 4-step
+  onboarding ribbon (`✓` 装 prax / 登微信 / 配渠道 / 加任务), tracked
+  live from the existing API state. Once all four turn green, the
+  ribbon prompts to hit "立刻跑一次".
+- **API contract**: `GET /api/runs` (newest-first listing) and
+  `GET /api/runs/{filename}` (content + inferred status). Path
+  traversal blocked at three layers — syntactic check, resolved-path
+  containment, and FastAPI's URL routing.
+
+### Notes
+- This closes the GUI scope set in the original plan (5 screens:
+  Health / WeChat accounts / Channels / Schedule / Runs). Sources is
+  the one remaining gap, deferred to 0.5.0 because it requires
+  changing the `ai-news-daily` skill's prompt contract to read sources
+  from a config file (today they're hardcoded in SKILL.md).
+- Tests: 29 unit tests (was 21). +8 cover runs listing,
+  newest-first ordering by parsed timestamp, status inference,
+  404-on-missing, and three different path-traversal payloads.
+- Phase 2 unblocked: with 5 screens shipped, beta recruitment can
+  start. Recommended cohort: 5-10 non-developers (PM / 自媒体 /
+  学生), 2-week loop, capture install_time / first_run_time /
+  drop_off_step / wow_moment per user.
+
 ## [0.3.0] - 2026-04-25
 
 ### Added
