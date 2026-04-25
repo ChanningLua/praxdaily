@@ -5,6 +5,37 @@ All notable changes to praxdaily will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-04-25
+
+### Polish (3 product-feel improvements, no functional change)
+- **Page header in main area** — every tab now opens with a 24px H1
+  title + muted subtitle ("Manage .prax/notify.yaml — 微信/飞书/邮件
+  等推送目标" etc.) above the KPI strip. Saves users from hunting for
+  "where am I" inside a section card and gives the panel an editorial
+  rhythm. Subtitles live in the same `tabs` array so adding a new
+  tab in the future updates the header automatically.
+- **Toast notifications** (bottom-right, glass styled) replace four
+  scattered inline message places (channel test result, channel save
+  error, sources save success, cron trigger result). Auto-dismiss at
+  4s for info/success and 6s for errors; `×` button for manual
+  dismiss. Animates in from the right with `@keyframes toastIn`. Border
+  color reflects kind (success → ok / error → danger / info → acc).
+  Side benefit: forms shrink because they no longer carry status
+  spans below the submit button.
+- **Keyboard shortcuts**:
+  - `⌘1`–`⌘6` (or `Ctrl+1`–`6`) jumps to the corresponding tab —
+    the chord is shown as a small `<kbd>` chip on each sidebar item
+    and the page header carries a `⌘K → 切换 tab` hint to teach the
+    pattern at a glance.
+  - `Esc` closes the run-log modal.
+  Implemented as a single `keydown` listener registered in `onMounted`,
+  so it lives inside Vue's lifecycle and won't leak across hot reloads.
+
+### Notes
+- All 42 unit tests still pass — pure presentation.
+- HTML grew to ~57KB (was 53KB after 0.6.1). Still single file, no
+  external JS bundle.
+
 ## [0.6.1] - 2026-04-25
 
 ### Polish (5 visual micro-improvements, no functional change)

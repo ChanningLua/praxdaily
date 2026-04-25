@@ -163,6 +163,25 @@
       to { opacity: 1; transform: translateY(0); }
     }
     .tab-anim { animation: tabIn 0.22s ease-out; }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .toast {
+      animation: toastIn 0.25s ease-out;
+      backdrop-filter: blur(12px) saturate(140%);
+      -webkit-backdrop-filter: blur(12px) saturate(140%);
+    }
+    .kbd {
+      display: inline-flex; align-items: center;
+      padding: 1px 6px;
+      font-family: ui-monospace, monospace;
+      font-size: 10px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--muted);
+    }
   </style>
 </head>
 <body>
@@ -175,15 +194,16 @@
       </div>
 
       <div
-        v-for="t in tabs"
+        v-for="(t, idx) in tabs"
         :key="t.id"
         @click="activeTab = t.id"
         class="tab"
         :class="{ active: activeTab === t.id }"
       >
         <span class="tab-icon" v-html="t.icon"></span>
-        <span>{{ t.label }}</span>
-        <span v-if="t.badge !== null" class="ml-auto text-xs text-muted">{{ t.badge }}</span>
+        <span class="flex-1">{{ t.label }}</span>
+        <span v-if="t.badge !== null" class="text-xs text-muted">{{ t.badge }}</span>
+        <span class="kbd">⌘{{ idx + 1 }}</span>
       </div>
 
       <div class="pt-4 mt-4 border-t" style="border-color: var(--border);">
@@ -194,6 +214,18 @@
 
     <!-- ── Main ──────────────────────────────────────────── -->
     <main class="flex-1 p-8 overflow-auto">
+      <!-- ── Page header (tab title + description) ────────── -->
+      <header class="mb-6 flex items-end justify-between">
+        <div>
+          <h1 class="text-2xl font-semibold tracking-tight">{{ currentTabMeta.title }}</h1>
+          <p class="text-sm text-muted mt-1">{{ currentTabMeta.subtitle }}</p>
+        </div>
+        <div class="flex items-center gap-2 text-xs text-muted">
+          <span class="kbd">⌘K</span>
+          <span>切换 tab</span>
+        </div>
+      </header>
+
       <!-- ── Top KPI strip (always visible) ───────────────── -->
       <div class="grid grid-cols-4 gap-4 mb-8">
         <div class="glass glass-hover p-4 stat-blue flex items-start gap-3">
@@ -405,9 +437,6 @@
               </tr>
             </tbody>
           </table>
-          <div v-if="testResult" class="mt-3 text-sm" :class="testResult.ok ? 'text-ok' : 'text-danger'">
-            {{ testResult.message }}
-          </div>
         </div>
       </section>
 
@@ -464,10 +493,7 @@
               </div>
             </div>
 
-            <div class="flex justify-end gap-3 items-center">
-              <span v-if="sourcesSaveResult" class="text-xs" :class="sourcesSaveResult.ok ? 'text-ok' : 'text-danger'">
-                {{ sourcesSaveResult.message }}
-              </span>
+            <div class="flex justify-end items-center">
               <button @click="saveSources" :disabled="savingSources" class="btn-primary">
                 {{ savingSources ? '保存中…' : '保存' }}
               </button>
@@ -514,9 +540,10 @@
             <pre v-if="cronOutput" class="mt-3 text-xs font-mono p-3 rounded whitespace-pre-wrap" style="background: rgba(0,0,0,0.3);">{{ cronOutput }}</pre>
           </div>
 
-          <div v-if="triggerResult" class="mb-4 p-3 rounded-xl text-sm border" :class="triggerResult.ok ? 'border-ok' : 'border-danger'" :style="{ background: triggerResult.ok ? 'rgba(61, 222, 157, 0.06)' : 'rgba(255, 109, 141, 0.06)' }">
-            <div class="font-medium" :class="triggerResult.ok ? 'text-ok' : 'text-danger'">{{ triggerResult.headline }}</div>
-            <pre v-if="triggerResult.tail" class="mt-2 text-xs font-mono p-2 rounded max-h-40 overflow-auto whitespace-pre-wrap" style="background: rgba(0,0,0,0.3);">{{ triggerResult.tail }}</pre>
+          <!-- triggerResult tail (full output) stays here for inspection; brief toast fires separately -->
+          <div v-if="triggerResult && triggerResult.tail" class="mb-4 p-3 rounded-xl text-sm border" :class="triggerResult.ok ? 'border-ok' : 'border-danger'" :style="{ background: triggerResult.ok ? 'rgba(61, 222, 157, 0.06)' : 'rgba(255, 109, 141, 0.06)' }">
+            <div class="font-medium mb-2" :class="triggerResult.ok ? 'text-ok' : 'text-danger'">{{ triggerResult.headline }}</div>
+            <pre class="text-xs font-mono p-2 rounded max-h-40 overflow-auto whitespace-pre-wrap" style="background: rgba(0,0,0,0.3);">{{ triggerResult.tail }}</pre>
           </div>
 
           <div v-if="showAddCron" class="rounded-xl border p-4 mb-4 space-y-3" style="border-color: var(--border); background: rgba(255,255,255,0.02);">
@@ -650,6 +677,24 @@
       </section>
     </main>
 
+    <!-- ── Toast container (bottom-right) ──────────────── -->
+    <div class="fixed bottom-6 right-6 z-50 space-y-2 pointer-events-none">
+      <div
+        v-for="t in toasts"
+        :key="t.id"
+        class="toast glass px-4 py-3 max-w-sm pointer-events-auto"
+        :style="{ borderColor: t.kind === 'error' ? 'var(--danger)' : (t.kind === 'success' ? 'var(--ok)' : 'var(--acc)') }"
+      >
+        <div class="flex items-start gap-3">
+          <span class="text-base leading-none mt-0.5" :class="{ 'text-ok': t.kind === 'success', 'text-danger': t.kind === 'error', 'text-acc': t.kind === 'info' }">
+            {{ t.kind === 'success' ? '✓' : (t.kind === 'error' ? '✗' : 'ℹ') }}
+          </span>
+          <div class="flex-1 text-sm">{{ t.message }}</div>
+          <button @click="dismissToast(t.id)" class="text-muted hover:text-ink text-sm leading-none">×</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Run viewer modal ────────────────────────────── -->
     <div v-if="viewedRun" class="fixed inset-0 flex items-center justify-center p-8 z-50" style="background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);" @click.self="viewedRun = null">
       <div class="glass max-w-3xl w-full max-h-[80vh] flex flex-col">
@@ -690,6 +735,20 @@
     createApp({
       setup() {
         const activeTab = ref('overview');
+
+        // ── Toast system ──
+        const toasts = ref([]);
+        let toastSeq = 0;
+        const showToast = (message, kind = 'info', timeout = 4000) => {
+          const id = ++toastSeq;
+          toasts.value.push({ id, message, kind });
+          if (timeout > 0) {
+            setTimeout(() => dismissToast(id), timeout);
+          }
+        };
+        const dismissToast = (id) => {
+          toasts.value = toasts.value.filter(t => t.id !== id);
+        };
 
         const health = reactive({ loading: true, error: '', data: {} });
         const wechat = reactive({ loading: true, accounts: [] });
@@ -750,13 +809,23 @@
         });
 
         const tabs = computed(() => [
-          { id: 'overview', label: '概览',     icon: ICON.overview, badge: null },
-          { id: 'wechat',   label: '微信账号', icon: ICON.wechat,   badge: wechat.accounts.length || null },
-          { id: 'channels', label: '通知渠道', icon: ICON.channels, badge: channels.list.length || null },
-          { id: 'sources',  label: '抓取源',   icon: ICON.sources,  badge: sources.is_user_config_present ? '✓' : null },
-          { id: 'cron',     label: '定时任务', icon: ICON.cron,     badge: cron.list.length || null },
-          { id: 'runs',     label: '运行历史', icon: ICON.runs,     badge: runs.list.length || null },
+          { id: 'overview', label: '概览',     icon: ICON.overview, badge: null,
+            title: '概览', subtitle: '当前 cwd 的 Prax 与 praxdaily 状态总览' },
+          { id: 'wechat',   label: '微信账号', icon: ICON.wechat,   badge: wechat.accounts.length || null,
+            title: '个人微信账号', subtitle: '已通过 prax wechat login 登录的 iLink 账号' },
+          { id: 'channels', label: '通知渠道', icon: ICON.channels, badge: channels.list.length || null,
+            title: '通知渠道', subtitle: '管理 .prax/notify.yaml — 微信/飞书/邮件等推送目标' },
+          { id: 'sources',  label: '抓取源',   icon: ICON.sources,  badge: sources.is_user_config_present ? '✓' : null,
+            title: '抓取源', subtitle: '管理 ai-news-daily 的源、抓取量、关键词过滤' },
+          { id: 'cron',     label: '定时任务', icon: ICON.cron,     badge: cron.list.length || null,
+            title: '定时任务', subtitle: '管理 .prax/cron.yaml — 到点自动跑 + 推到上面的渠道' },
+          { id: 'runs',     label: '运行历史', icon: ICON.runs,     badge: runs.list.length || null,
+            title: '运行历史', subtitle: '最近 30 条 cron run 日志，点行查看全文' },
         ]);
+
+        const currentTabMeta = computed(() => {
+          return tabs.value.find(t => t.id === activeTab.value) || tabs.value[0];
+        });
 
         // ── fetchers ──
         const fetchHealth = async () => {
@@ -840,29 +909,36 @@
           await fetchChannels();
         };
         const testSend = async (name) => {
-          testing.value = name; testResult.value = null;
+          testing.value = name;
           try {
             const r = await fetch(`/api/channels/${encodeURIComponent(name)}/test`, {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({}),
             });
             const d = await r.json();
-            testResult.value = r.ok ? { ok: true, message: `✓ 测试已发到 "${name}"` } : { ok: false, message: `✗ ${d.detail || r.statusText}` };
+            if (r.ok) showToast(`测试已发到 "${name}"`, 'success');
+            else showToast(`测发失败 [${name}]: ${d.detail || r.statusText}`, 'error', 6000);
+          } catch (e) {
+            showToast(`测发出错: ${e.message}`, 'error', 6000);
           } finally { testing.value = null; }
         };
 
         // ── sources ──
         const splitTags = (s) => (s || '').split(/[,，]/).map(t => t.trim()).filter(Boolean);
         const saveSources = async () => {
-          savingSources.value = true; sourcesSaveResult.value = null;
+          savingSources.value = true;
           const payload = {
             sources: sources.list.map(s => ({ id: s.id, enabled: !!s.enabled, limit: parseInt(s.limit) || 10, top_n: parseInt(s.top_n) || 5 })),
             keywords: { include: splitTags(sources.includeText), exclude: splitTags(sources.excludeText) },
           };
           try {
             const r = await fetch('/api/sources', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            if (r.ok) { sourcesSaveResult.value = { ok: true, message: '✓ 已保存' }; await fetchSources(); await fetchHealth(); }
-            else sourcesSaveResult.value = { ok: false, message: (await r.json()).detail || `HTTP ${r.status}` };
+            if (r.ok) {
+              showToast('抓取源配置已保存', 'success');
+              await fetchSources(); await fetchHealth();
+            } else {
+              showToast(`保存失败: ${(await r.json()).detail || r.statusText}`, 'error', 6000);
+            }
           } finally { savingSources.value = false; }
         };
         const resetSources = async () => {
@@ -912,13 +988,16 @@
             const r = await fetch(`/api/cron/${encodeURIComponent(name)}/trigger-now`, { method: 'POST' });
             const d = await r.json();
             if (r.ok) {
+              const ok = d.exit_code === 0;
               triggerResult.value = {
-                ok: d.exit_code === 0,
-                headline: d.exit_code === 0 ? `✓ "${name}" 触发完成 (exit 0)` : `✗ "${name}" 退出 ${d.exit_code}`,
+                ok,
+                headline: ok ? `✓ "${name}" 触发完成 (exit 0)` : `✗ "${name}" 退出 ${d.exit_code}`,
                 tail: d.output_tail || '',
               };
+              showToast(ok ? `任务 "${name}" 触发完成` : `任务 "${name}" 退出 ${d.exit_code}（详见下方输出）`, ok ? 'success' : 'error');
             } else {
               triggerResult.value = { ok: false, headline: `✗ ${d.detail || r.statusText}`, tail: '' };
+              showToast(`触发失败: ${d.detail || r.statusText}`, 'error', 6000);
             }
             await fetchRuns();
           } finally { triggering.value = null; }
@@ -932,7 +1011,26 @@
           } catch (e) { alert(`加载失败: ${e.message}`); }
         };
 
+        // ── Keyboard shortcuts ──
+        const handleKeydown = (e) => {
+          // Esc closes modal
+          if (e.key === 'Escape' && viewedRun.value) {
+            viewedRun.value = null;
+            e.preventDefault();
+            return;
+          }
+          // Cmd/Ctrl + 1..6 → switch tab
+          if ((e.metaKey || e.ctrlKey) && e.key >= '1' && e.key <= '6') {
+            const idx = parseInt(e.key, 10) - 1;
+            if (tabs.value[idx]) {
+              activeTab.value = tabs.value[idx].id;
+              e.preventDefault();
+            }
+          }
+        };
+
         onMounted(async () => {
+          window.addEventListener('keydown', handleKeydown);
           await Promise.all([
             fetchHealth(), fetchWechatAccounts(), fetchChannels(),
             fetchSources(), fetchCron(), fetchRuns(),
@@ -940,7 +1038,8 @@
         });
 
         return {
-          activeTab, tabs,
+          activeTab, tabs, currentTabMeta,
+          toasts, dismissToast,
           health, wechat, channels, sources, cron, runs,
           form, showAddChannel, saveError, testing, testResult,
           showAddCron, cronForm, cronSaveError, cronAction, cronOutput,
