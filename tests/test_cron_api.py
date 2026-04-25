@@ -37,6 +37,14 @@ def test_list_jobs_empty(tmp_path):
 
 def test_upsert_job_writes_yaml(tmp_path):
     client = _client(tmp_path)
+    # Channel must exist before cron job can reference it (post-0.4.1).
+    client.put(
+        "/api/channels/my-wechat",
+        json={
+            "provider": "wechat_personal",
+            "account_id": "ilink_xxx@im.bot",
+        },
+    )
     r = client.put(
         "/api/cron/daily-news",
         json={
@@ -141,3 +149,71 @@ def test_run_once_503_when_prax_cli_missing(tmp_path):
         r = client.post("/api/cron/run-once")
     assert r.status_code == 503
     assert "prax CLI not on PATH" in r.json()["detail"]
+
+
+# ── 0.4.1: notify_channel must exist + per-job trigger-now ────────────────
+
+
+def test_upsert_rejects_notify_channel_that_doesnt_exist(tmp_path):
+    """Saving a cron job that points at a missing channel should 400 —
+    otherwise the job runs and silently no-ops the notify step at runtime."""
+    r = _client(tmp_path).put(
+        "/api/cron/orphan",
+        json={
+            "schedule": "0 17 * * *",
+            "prompt": "x",
+            "notify_on": ["success"],
+            "notify_channel": "nonexistent-channel",
+        },
+    )
+    assert r.status_code == 400
+    assert "nonexistent-channel" in r.json()["detail"]
+
+
+def test_upsert_accepts_when_no_notify_channel_specified(tmp_path):
+    """Empty notify_channel must still be accepted — it just means
+    'don't send a notification on success/failure'."""
+    r = _client(tmp_path).put(
+        "/api/cron/silent-job",
+        json={"schedule": "0 17 * * *", "prompt": "x"},
+    )
+    assert r.status_code == 200, r.text
+
+
+def test_trigger_now_404_on_missing_job(tmp_path):
+    r = _client(tmp_path).post("/api/cron/nope/trigger-now")
+    assert r.status_code == 404
+
+
+def test_trigger_now_503_when_prax_cli_missing(tmp_path):
+    client = _client(tmp_path)
+    client.put("/api/cron/x", json={"schedule": "0 17 * * *", "prompt": "say hi"})
+    with patch("praxdaily.routes.cron.shutil.which", return_value=None):
+        r = client.post("/api/cron/x/trigger-now")
+    assert r.status_code == 503
+
+
+def test_trigger_now_shells_out_to_prax_prompt_with_job_prompt(tmp_path):
+    client = _client(tmp_path)
+    client.put(
+        "/api/cron/say-hi",
+        json={"schedule": "0 17 * * *", "prompt": "用一句话问候我"},
+    )
+    fake_proc = type(
+        "P", (), {"returncode": 0, "stdout": "你好。", "stderr": ""}
+    )()
+    with patch("praxdaily.routes.cron.shutil.which", return_value="/fake/prax"), \
+         patch("praxdaily.routes.cron.subprocess.run", return_value=fake_proc) as mock_run:
+        r = client.post("/api/cron/say-hi/trigger-now")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["triggered"] is True
+    assert body["exit_code"] == 0
+    assert "你好" in body["output_tail"]
+    # Critical: the spawned argv must use the job's prompt verbatim, not the
+    # job name — bug we'd hit if we shelled to `prax cron run <name>` or
+    # similar.
+    args = mock_run.call_args.args[0]
+    assert args[:3] == ["/fake/prax", "prompt", "用一句话问候我"]
+    assert "--permission-mode" in args
+    assert "workspace-write" in args

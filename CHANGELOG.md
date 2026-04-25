@@ -5,6 +5,36 @@ All notable changes to praxdaily will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-04-25
+
+### Fixed (UX gaps from self-test)
+- **"立刻跑一次" only fired DUE jobs** — at any time other than the
+  scheduled minute the user got `No due jobs at <ts>` and no clue why
+  their newly-added 17:00 job didn't run. New per-row **"立即触发"**
+  button on each cron job force-runs that one job's prompt now,
+  bypassing the schedule check. Goes through `prax prompt <prompt>
+  --permission-mode workspace-write` (same code path as the cron
+  dispatcher's subprocess). Result + tail surface back into the GUI
+  in a green/red box. (`POST /api/cron/{name}/trigger-now`)
+- **Cron jobs could be saved with a notify_channel that doesn't
+  exist** — the job ran but silently no-op'd the notify step at
+  runtime, leaving users wondering why their phone never buzzed.
+  Upsert now validates the channel exists in `.prax/notify.yaml` and
+  returns a 400 with a clear message if not.
+- **`.prax/ exists` health row was stale after CRUD** — adding the
+  first channel/cron creates `.prax/`, but the top status panel
+  still said `no` until reload. Each save now re-fetches health.
+- **wechat_personal account_id dropdown was empty + silent** when no
+  iLink accounts were logged in — users had no idea what to do. The
+  dropdown is now disabled in that state with an inline orange hint
+  pointing to `prax wechat login`.
+
+### Notes
+- Tests: 34 unit (was 29). +5 cover trigger-now happy path, 404 on
+  missing job, 503 on missing CLI, channel-validation reject, and
+  empty-notify_channel acceptance. The previous "save cron with
+  channel" test was updated to PUT the channel first.
+
 ## [0.4.0] - 2026-04-25
 
 ### Added

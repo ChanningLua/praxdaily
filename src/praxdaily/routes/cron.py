@@ -95,6 +95,26 @@ async def list_jobs(request: Request) -> JSONResponse:
     return JSONResponse({"jobs": jobs})
 
 
+def _channel_exists(cwd, channel_name: str) -> bool:
+    """Check if a notify channel is declared in .prax/notify.yaml.
+
+    Read-only — we don't import praxagent's loader here because praxdaily
+    must keep working when only npm-installed and praxagent's Python
+    package isn't import-resolvable.
+    """
+    from pathlib import Path
+
+    path = Path(cwd) / ".prax" / "notify.yaml"
+    if not path.exists():
+        return False
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError:
+        return False
+    channels = data.get("channels") if isinstance(data, dict) else None
+    return isinstance(channels, dict) and channel_name in channels
+
+
 @router.put("/{name}")
 async def upsert_job(
     name: str, payload: CronJobUpsert, request: Request
@@ -110,6 +130,21 @@ async def upsert_job(
             )
 
     cwd = request.app.state.cwd
+
+    # If the user wired a notify_channel, make sure it actually exists in
+    # notify.yaml. Without this guard, the cron job would silently no-op
+    # the notify step at run time and the user would have no idea why
+    # their phone never buzzed.
+    if payload.notify_channel and not _channel_exists(cwd, payload.notify_channel):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"notify_channel {payload.notify_channel!r} not found in "
+                f".prax/notify.yaml. Add the channel first, or leave "
+                f"notify_channel empty."
+            ),
+        )
+
     jobs = _load_jobs(cwd)
     new_record = payload.to_yaml_dict(name)
     # Replace existing job with same name, else append.
@@ -170,8 +205,65 @@ async def uninstall_dispatcher(request: Request) -> JSONResponse:
 
 @router.post("/run-once")
 async def run_once_now(request: Request) -> JSONResponse:
-    """Manually fire all due jobs once. Useful for testing without waiting."""
+    """Fire all DUE jobs once (same semantics as `prax cron run`).
+
+    Note: jobs whose schedule doesn't match the current minute are NOT
+    fired here. To force-run a specific job regardless of schedule, see
+    `POST /api/cron/{name}/trigger-now`.
+    """
     rc, output = _run_prax_cron("run", cwd=request.app.state.cwd)
     if rc != 0:
         raise HTTPException(status_code=500, detail=output or "run failed")
     return JSONResponse({"dispatched": True, "output": output})
+
+
+@router.post("/{name}/trigger-now")
+async def trigger_job_now(name: str, request: Request) -> JSONResponse:
+    """Force-run one job's prompt RIGHT NOW, ignoring its schedule.
+
+    Goes through `prax prompt <prompt>` directly with workspace-write —
+    same code path the cron dispatcher uses for the actual subprocess.
+    Bypasses notify_on/notify_channel because the user explicitly
+    triggered it and is staring at the GUI; if they want a notify they
+    can hit "立刻跑一次" instead (which respects schedule + notify).
+    """
+    import shutil
+    import subprocess
+
+    cwd = request.app.state.cwd
+    jobs = _load_jobs(cwd)
+    job = next((j for j in jobs if j.get("name") == name), None)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"job {name!r} not found")
+
+    prompt = str(job.get("prompt") or "").strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail=f"job {name!r} has empty prompt")
+
+    prax = shutil.which("prax")
+    if prax is None:
+        raise HTTPException(
+            status_code=503,
+            detail="prax CLI not on PATH — install with `npm install -g praxagent`",
+        )
+
+    argv = [prax, "prompt", prompt, "--permission-mode", "workspace-write"]
+    try:
+        proc = subprocess.run(
+            argv, cwd=str(cwd), capture_output=True, text=True, timeout=600
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(
+            status_code=504,
+            detail=f"job {name!r} exceeded 10-minute trigger budget",
+        )
+
+    output = (proc.stdout or proc.stderr or "").strip()
+    return JSONResponse(
+        {
+            "triggered": True,
+            "name": name,
+            "exit_code": proc.returncode,
+            "output_tail": output[-2000:],
+        }
+    )
