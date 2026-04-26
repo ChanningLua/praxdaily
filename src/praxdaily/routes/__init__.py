@@ -10,6 +10,7 @@ from .cron import router as cron_router
 from .runs import router as runs_router
 from .sources import router as sources_router
 from .wechat import router as wechat_router
+from .workspaces import router as workspaces_router
 
 __all__ = [
     "channels_router",
@@ -17,4 +18,5 @@ __all__ = [
     "runs_router",
     "sources_router",
     "wechat_router",
+    "workspaces_router",
 ]

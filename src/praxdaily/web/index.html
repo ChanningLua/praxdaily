@@ -188,10 +188,41 @@
 <body>
   <div id="app" class="min-h-screen flex">
     <!-- ── Sidebar ───────────────────────────────────────── -->
-    <aside class="w-56 flex-shrink-0 p-4 space-y-1 border-r" style="border-color: var(--border);">
-      <div class="px-3 py-2 mb-4">
-        <div class="text-xl font-bold tracking-tight">praxdaily</div>
-        <div class="text-xs text-muted mt-0.5">本地 AI 信息助理</div>
+    <aside :class="sidebarCollapsed ? 'w-16' : 'w-56'" class="flex-shrink-0 p-4 space-y-1 border-r transition-all" style="border-color: var(--border);">
+      <div class="flex items-center justify-between px-3 py-2 mb-4">
+        <div v-if="!sidebarCollapsed">
+          <div class="text-xl font-bold tracking-tight">praxdaily</div>
+          <div class="text-xs text-muted mt-0.5">本地 AI 信息助理</div>
+        </div>
+        <button
+          @click="toggleSidebar"
+          class="text-muted hover:text-ink p-1 rounded"
+          :title="sidebarCollapsed ? '展开侧栏' : '收起侧栏'"
+        >
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line v-if="!sidebarCollapsed" x1="18" y1="6" x2="6" y2="18"/>
+            <line v-if="!sidebarCollapsed" x1="6" y1="6" x2="18" y2="18"/>
+            <template v-else><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></template>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Workspace selector -->
+      <div v-if="!sidebarCollapsed" class="px-3 mb-3">
+        <label class="text-xs uppercase tracking-wider text-muted">工作目录</label>
+        <select
+          v-model="workspaces.current"
+          @change="onSelectWorkspace($event.target.value)"
+          class="w-full mt-1 px-2 py-1.5 text-xs font-mono"
+          :title="workspaces.current"
+        >
+          <option v-for="w in workspaces.known" :key="w" :value="w">
+            {{ shortPath(w) }}
+          </option>
+        </select>
+        <button @click="openAddWorkspace" class="text-xs text-acc hover:underline mt-1">
+          + 添加目录
+        </button>
       </div>
 
       <div
@@ -200,16 +231,18 @@
         @click="activeTab = t.id"
         class="tab"
         :class="{ active: activeTab === t.id }"
+        :title="sidebarCollapsed ? t.label : ''"
       >
         <span class="tab-icon" v-html="t.icon"></span>
-        <span class="flex-1">{{ t.label }}</span>
-        <span v-if="t.badge !== null" class="text-xs text-muted">{{ t.badge }}</span>
-        <span class="kbd">⌘{{ idx + 1 }}</span>
+        <template v-if="!sidebarCollapsed">
+          <span class="flex-1">{{ t.label }}</span>
+          <span v-if="t.badge !== null" class="text-xs text-muted">{{ t.badge }}</span>
+          <span class="kbd">⌘{{ idx + 1 }}</span>
+        </template>
       </div>
 
-      <div class="pt-4 mt-4 border-t" style="border-color: var(--border);">
+      <div v-if="!sidebarCollapsed" class="pt-4 mt-4 border-t" style="border-color: var(--border);">
         <div class="px-3 text-xs text-muted">v{{ health.data.praxdaily_version || '...' }}</div>
-        <div class="px-3 text-xs text-muted mt-1 truncate">{{ health.data.cwd || '' }}</div>
       </div>
     </aside>
 
@@ -726,6 +759,33 @@
       </section>
     </main>
 
+    <!-- ── Add workspace modal ──────────────────────────── -->
+    <div v-if="addWorkspaceModal.open" class="fixed inset-0 flex items-center justify-center p-8 z-50" style="background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);" @click.self="addWorkspaceModal.open = false">
+      <div class="glass max-w-md w-full">
+        <div class="flex justify-between items-center p-5 border-b" style="border-color: var(--border);">
+          <h3 class="font-semibold">添加工作目录</h3>
+          <button @click="addWorkspaceModal.open = false" class="text-muted hover:text-ink text-xl leading-none">✕</button>
+        </div>
+        <div class="p-5 space-y-3">
+          <p class="text-sm text-muted">
+            填一个绝对路径。该目录下的 <code>.prax/</code> 会用来存渠道 / 任务 / 抓取源 配置。
+          </p>
+          <input
+            v-model="addWorkspaceModal.path"
+            @keydown.enter="confirmAddWorkspace"
+            placeholder="/Users/you/projects/my-news"
+            class="w-full px-3 py-2 text-sm font-mono"
+            ref="addWsInput"
+          />
+          <div v-if="addWorkspaceModal.error" class="text-sm text-danger">{{ addWorkspaceModal.error }}</div>
+          <div class="flex justify-end gap-3 pt-2">
+            <button @click="addWorkspaceModal.open = false" class="btn-link text-muted">取消</button>
+            <button @click="confirmAddWorkspace" :disabled="!addWorkspaceModal.path.trim()" class="btn-primary">添加并切换</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Command palette (⌘K) ────────────────────────── -->
     <div v-if="palette.open" class="fixed inset-0 flex items-start justify-center pt-32 z-50" style="background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);" @click.self="closePalette">
       <div class="glass max-w-xl w-full mx-4 overflow-hidden">
@@ -863,6 +923,93 @@
     createApp({
       setup() {
         const activeTab = ref('overview');
+
+        // ── Sidebar collapse (persisted to localStorage) ──
+        const sidebarCollapsed = ref(localStorage.getItem('praxdaily.sidebarCollapsed') === '1');
+        const toggleSidebar = () => {
+          sidebarCollapsed.value = !sidebarCollapsed.value;
+          localStorage.setItem('praxdaily.sidebarCollapsed', sidebarCollapsed.value ? '1' : '0');
+        };
+
+        // ── Workspaces ──
+        const workspaces = reactive({ current: '', known: [] });
+        const addWorkspaceModal = reactive({ open: false, path: '', error: '' });
+        const addWsInput = ref(null);
+
+        const shortPath = (p) => {
+          if (!p) return '';
+          // Replace ~/ if applicable, else show last 2 path segments
+          const home = (window.HOME_PATH || '').replace(/\/$/, '');
+          if (home && p.startsWith(home)) return '~' + p.slice(home.length);
+          const parts = p.split('/').filter(Boolean);
+          return parts.length <= 2 ? p : '…/' + parts.slice(-2).join('/');
+        };
+
+        const fetchWorkspaces = async () => {
+          try {
+            const r = await fetch('/api/workspaces');
+            const d = await r.json();
+            workspaces.current = d.current;
+            workspaces.known = d.known || [];
+          } catch {}
+        };
+
+        const onSelectWorkspace = async (path) => {
+          try {
+            const r = await fetch('/api/workspaces/select', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path }),
+            });
+            const d = await r.json();
+            if (!r.ok) {
+              showToast(`切换失败: ${d.detail || r.statusText}`, 'error');
+              return;
+            }
+            workspaces.current = d.current;
+            // Reload all data tied to the new workspace
+            showToast(`已切到 ${shortPath(d.current)}`, 'info', 2000);
+            await Promise.all([
+              fetchHealth(), fetchChannels(), fetchSources(), fetchCron(), fetchRuns(),
+            ]);
+          } catch (e) {
+            showToast(`切换出错: ${e.message}`, 'error');
+          }
+        };
+
+        const openAddWorkspace = () => {
+          addWorkspaceModal.open = true;
+          addWorkspaceModal.path = '';
+          addWorkspaceModal.error = '';
+          setTimeout(() => addWsInput.value && addWsInput.value.focus(), 50);
+        };
+
+        const confirmAddWorkspace = async () => {
+          const path = addWorkspaceModal.path.trim();
+          if (!path) return;
+          addWorkspaceModal.error = '';
+          try {
+            const r = await fetch('/api/workspaces', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path }),
+            });
+            const d = await r.json();
+            if (!r.ok) {
+              addWorkspaceModal.error = d.detail || `HTTP ${r.status}`;
+              return;
+            }
+            workspaces.current = d.current;
+            workspaces.known = d.known;
+            addWorkspaceModal.open = false;
+            showToast(`已添加并切到 ${shortPath(d.current)}`, 'success');
+            await Promise.all([
+              fetchHealth(), fetchChannels(), fetchSources(), fetchCron(), fetchRuns(),
+            ]);
+          } catch (e) {
+            addWorkspaceModal.error = e.message;
+          }
+        };
 
         // ── WeChat QR login state ──
         const qrContainer = ref(null);
@@ -1443,9 +1590,10 @@
 
         // ── Keyboard shortcuts ──
         const handleKeydown = (e) => {
-          // Esc closes any open modal (palette > QR > run viewer)
+          // Esc closes any open modal (palette > workspace > QR > run viewer)
           if (e.key === 'Escape') {
             if (palette.open) { closePalette(); e.preventDefault(); return; }
+            if (addWorkspaceModal.open) { addWorkspaceModal.open = false; e.preventDefault(); return; }
             if (loginModal.open) { closeLoginModal(); e.preventDefault(); return; }
             if (viewedRun.value) { viewedRun.value = null; e.preventDefault(); return; }
           }
@@ -1469,14 +1617,18 @@
           window.addEventListener('keydown', handleKeydown);
           startRunsAutoRefresh();
           await Promise.all([
-            fetchHealth(), fetchWechatAccounts(), fetchChannels(),
-            fetchSources(), fetchCron(), fetchRuns(),
+            fetchHealth(), fetchWorkspaces(), fetchWechatAccounts(),
+            fetchChannels(), fetchSources(), fetchCron(), fetchRuns(),
           ]);
         });
 
         return {
           activeTab, tabs, currentTabMeta,
           toasts, dismissToast,
+          // sidebar / workspaces
+          sidebarCollapsed, toggleSidebar,
+          workspaces, addWorkspaceModal, addWsInput, shortPath,
+          onSelectWorkspace, openAddWorkspace, confirmAddWorkspace,
           // command palette
           palette, paletteCursor, paletteInput,
           paletteFiltered, paletteKindClass,

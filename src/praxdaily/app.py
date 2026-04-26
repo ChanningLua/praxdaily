@@ -29,17 +29,48 @@ def create_app(cwd: Path) -> FastAPI:
         version=__version__,
         description="Local web panel for Prax's ai-news-daily flagship workflow.",
     )
+    # ``app.state.cwd`` is the *server-launch* default. The active
+    # workspace is chosen separately and looked up via
+    # ``praxdaily.workspaces.current_cwd(default_cwd=str(cwd))`` —
+    # routes call ``_resolve_cwd(request)`` rather than reading
+    # app.state.cwd directly.
     app.state.cwd = cwd
+    # Patch app.state.cwd to dynamically resolve the active workspace,
+    # so existing routes that read ``request.app.state.cwd`` get the
+    # current selection without code changes.
+    from .workspaces import current_cwd as _current_workspace_cwd
+
+    class _LiveCwd:
+        """Mimics a Path-like for ``str()`` and ``/`` operations."""
+        def __init__(self, default_cwd: Path):
+            self._default = str(default_cwd)
+        def _now(self) -> Path:
+            return Path(_current_workspace_cwd(default_cwd=self._default))
+        def __str__(self) -> str:
+            return str(self._now())
+        def __fspath__(self) -> str:
+            return str(self._now())
+        def __truediv__(self, other) -> Path:
+            return self._now() / other
+        @property
+        def exists(self):
+            return self._now().exists
+
+    app.state.cwd = _LiveCwd(cwd)
+    # Keep the unwrapped seed available for the workspaces route.
+    app.state.default_cwd = cwd
 
     # Mount API route modules.
     from .routes import (
-        channels_router, cron_router, runs_router, sources_router, wechat_router,
+        channels_router, cron_router, runs_router, sources_router,
+        wechat_router, workspaces_router,
     )
     app.include_router(channels_router)
     app.include_router(cron_router)
     app.include_router(runs_router)
     app.include_router(sources_router)
     app.include_router(wechat_router)
+    app.include_router(workspaces_router)
 
     @app.get("/api/health")
     async def health() -> JSONResponse:
@@ -56,13 +87,15 @@ def create_app(cwd: Path) -> FastAPI:
                 prax_version = (proc.stdout or proc.stderr).strip() or None
             except Exception:
                 pass
+        active_cwd = Path(str(app.state.cwd))
         return JSONResponse(
             {
                 "praxdaily_version": __version__,
-                "cwd": str(cwd),
+                "cwd": str(active_cwd),
+                "default_cwd": str(app.state.default_cwd),
                 "prax_on_path": prax_path,
                 "prax_version": prax_version,
-                "prax_dir_exists": (cwd / ".prax").exists(),
+                "prax_dir_exists": (active_cwd / ".prax").exists(),
             }
         )
 
