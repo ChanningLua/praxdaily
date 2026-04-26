@@ -65,35 +65,97 @@ def _infer_status(body: str) -> str:
 
 
 @router.get("")
-async def list_runs(request: Request) -> JSONResponse:
-    """List all cron-run logs, newest first."""
+async def list_runs(
+    request: Request,
+    name: str = "",
+    status: str = "",
+    limit: int = 100,
+) -> JSONResponse:
+    """List cron-run logs, newest first.
+
+    Query params (all optional):
+      name=<substring>       case-insensitive substring match on job name
+      status=success|failure|unknown
+                             filter by inferred status; reads each log's
+                             content (cheap — small files), so it's slower
+                             than name-only filtering on big histories
+      limit=<int>            cap result count (default 100, max 1000)
+
+    The total count *before* filtering is always returned so the GUI can
+    show "12 of 87" when a search narrows results.
+    """
     cwd = request.app.state.cwd
     logs_dir = _logs_dir(cwd)
-    if not logs_dir.exists():
-        return JSONResponse({"runs": []})
+    limit = max(1, min(1000, limit))
 
-    runs: list[dict] = []
+    name_q = name.strip().lower()
+    status_q = status.strip().lower()
+    valid_statuses = {"success", "failure", "unknown", ""}
+    if status_q not in valid_statuses:
+        # Validate even when no logs exist — a typo in the query string
+        # should always 400 so callers learn fast.
+        raise HTTPException(
+            status_code=400,
+            detail=f"invalid status filter {status!r}; use one of "
+            f"{sorted(valid_statuses - {''})}",
+        )
+
+    if not logs_dir.exists():
+        return JSONResponse({"runs": [], "total": 0, "filtered_total": 0})
+
+    raw: list[dict] = []
     for path in logs_dir.glob("*.log"):
         parsed = _parse_filename(path.name)
         if parsed is None:
             continue
-        name, ts = parsed
+        job_name, ts = parsed
         try:
             stat = path.stat()
         except OSError:
             continue
-        runs.append(
+        raw.append(
             {
                 "filename": path.name,
-                "name": name,
+                "name": job_name,
                 "started_at": ts,
                 "size_bytes": stat.st_size,
+                "_path": path,
             }
         )
-    # Newest first by parsed timestamp — sorting by filename alone would
-    # mix jobs (`beta-2026-01` would appear before `alpha-2026-04`).
-    runs.sort(key=lambda r: r["started_at"], reverse=True)
-    return JSONResponse({"runs": runs})
+
+    raw.sort(key=lambda r: r["started_at"], reverse=True)
+    total = len(raw)
+
+    # Name filter is cheap — apply first.
+    if name_q:
+        raw = [r for r in raw if name_q in r["name"].lower()]
+
+    # Status filter requires reading log bodies. Only do it if explicitly
+    # asked (avoids spurious IO on the common "no filter" path).
+    if status_q:
+        with_status: list[dict] = []
+        for r in raw:
+            try:
+                body = r["_path"].read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if _infer_status(body) == status_q:
+                with_status.append(r)
+        raw = with_status
+
+    filtered_total = len(raw)
+    raw = raw[:limit]
+
+    return JSONResponse(
+        {
+            "runs": [
+                {k: v for k, v in r.items() if not k.startswith("_")}
+                for r in raw
+            ],
+            "total": total,
+            "filtered_total": filtered_total,
+        }
+    )
 
 
 @router.get("/{filename}")

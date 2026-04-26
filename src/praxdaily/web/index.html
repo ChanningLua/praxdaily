@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.jsdelivr.net/npm/vue@3.4.27/dist/vue.global.prod.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -643,19 +643,60 @@
         <div class="glass p-6">
           <div class="flex justify-between items-start mb-4">
             <div>
-              <h2 class="text-lg font-semibold">运行历史</h2>
-              <p class="text-sm text-muted mt-1">
-                <code>.prax/logs/cron/&lt;name&gt;-&lt;ts&gt;.log</code>，按时间倒序最近 30 条。
+              <p class="text-sm text-muted">
+                <code>.prax/logs/cron/&lt;name&gt;-&lt;ts&gt;.log</code> · 30 秒自动刷新
               </p>
             </div>
-            <button @click="fetchRuns" class="btn-ghost">刷新</button>
+            <div class="flex items-center gap-3">
+              <label class="flex items-center gap-1 text-xs text-muted">
+                <input type="checkbox" v-model="runsFilter.autoRefresh" /> 自动刷新
+              </label>
+              <button @click="fetchRuns" class="btn-ghost">刷新</button>
+            </div>
           </div>
 
-          <div v-if="runs.loading" class="text-sm text-muted">加载…</div>
-          <div v-else-if="runs.list.length === 0" class="empty-state">
+          <!-- Filter bar -->
+          <div class="grid grid-cols-3 gap-3 mb-4 pb-4 border-b" style="border-color: var(--border);">
+            <div>
+              <label class="text-xs text-muted block mb-1">job 名搜索</label>
+              <input
+                v-model="runsFilter.name"
+                @input="fetchRunsDebounced"
+                placeholder="子串匹配，例：news"
+                class="w-full px-3 py-1.5 text-sm font-mono"
+              />
+            </div>
+            <div>
+              <label class="text-xs text-muted block mb-1">状态</label>
+              <select v-model="runsFilter.status" @change="fetchRuns" class="w-full px-3 py-1.5 text-sm">
+                <option value="">全部</option>
+                <option value="success">success</option>
+                <option value="failure">failure</option>
+                <option value="unknown">unknown</option>
+              </select>
+            </div>
+            <div class="flex items-end">
+              <div class="text-xs text-muted">
+                <span v-if="runs.total === 0">还没记录</span>
+                <span v-else-if="runs.filtered_total === runs.total">{{ runs.total }} 条记录</span>
+                <span v-else>{{ runs.filtered_total }} / {{ runs.total }} 条匹配</span>
+                <span v-if="runs.list.length < runs.filtered_total" class="text-warn ml-2">
+                  （仅显示前 {{ runs.list.length }}，缩小搜索范围看更多）
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="runs.loading && runs.list.length === 0" class="text-sm text-muted">加载…</div>
+          <div v-else-if="runs.total === 0" class="empty-state">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             <div class="empty-title">还没运行记录</div>
             <div class="empty-hint">去 <span class="text-acc cursor-pointer" @click="activeTab='cron'">定时任务</span> 点"立即触发"，或等定时到点</div>
+          </div>
+          <div v-else-if="runs.list.length === 0" class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <div class="empty-title">没有匹配的记录</div>
+            <div class="empty-hint">清空搜索框或换个状态再试</div>
           </div>
           <table v-else class="w-full text-sm">
             <thead>
@@ -668,7 +709,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="r in runs.list.slice(0, 30)" :key="r.filename" class="table-row border-t cursor-pointer" style="border-color: var(--border);" @click="openRun(r.filename)">
+              <tr v-for="r in runs.list" :key="r.filename" class="table-row border-t cursor-pointer" style="border-color: var(--border);" @click="openRun(r.filename)">
                 <td class="py-3 font-mono">{{ r.name }}</td>
                 <td class="py-3 text-xs font-mono text-muted">{{ formatStarted(r.started_at) }}</td>
                 <td class="py-3">
@@ -701,9 +742,7 @@
             <button @click="startWechatLogin" class="btn-link ml-2">重试</button>
           </div>
           <template v-else>
-            <div class="bg-white rounded-xl p-4 inline-block mb-4">
-              <canvas ref="qrCanvas" width="240" height="240"></canvas>
-            </div>
+            <div ref="qrContainer" class="bg-white rounded-xl p-4 inline-block mb-4" style="min-width: 248px; min-height: 248px;"></div>
             <div class="text-sm">
               <span v-if="loginModal.status === 'wait'" class="text-muted">
                 <span class="pulse">●</span> 等待扫码…
@@ -786,7 +825,7 @@
         const activeTab = ref('overview');
 
         // ── WeChat QR login state ──
-        const qrCanvas = ref(null);
+        const qrContainer = ref(null);
         const loginModal = reactive({
           open: false,
           status: '',          // wait | scaned | scaned_but_redirect | expired | confirmed
@@ -839,7 +878,14 @@
         const triggering = ref(null);
         const triggerResult = ref(null);
 
-        const runs = reactive({ loading: true, list: [] });
+        const runs = reactive({ loading: true, list: [], total: 0, filtered_total: 0 });
+        const runsFilter = reactive({
+          name: '',
+          status: '',
+          autoRefresh: true,
+        });
+        let runsFilterDebounceTimer = null;
+        let runsAutoRefreshTimer = null;
         const runStatuses = reactive({});
         const viewedRun = ref(null);
 
@@ -929,10 +975,17 @@
         const fetchRuns = async () => {
           runs.loading = true;
           try {
-            const r = await fetch('/api/runs');
-            runs.list = (await r.json()).runs || [];
-            const visible = runs.list.slice(0, 30);
-            await Promise.all(visible.map(async (rec) => {
+            const params = new URLSearchParams();
+            if (runsFilter.name.trim()) params.set('name', runsFilter.name.trim());
+            if (runsFilter.status) params.set('status', runsFilter.status);
+            params.set('limit', '50');
+            const r = await fetch(`/api/runs?${params.toString()}`);
+            const d = await r.json();
+            runs.list = d.runs || [];
+            runs.total = d.total ?? runs.list.length;
+            runs.filtered_total = d.filtered_total ?? runs.list.length;
+            // Lazy-load per-run status badges in parallel.
+            await Promise.all(runs.list.map(async (rec) => {
               if (runStatuses[rec.filename] !== undefined) return;
               try {
                 const rr = await fetch(`/api/runs/${encodeURIComponent(rec.filename)}`);
@@ -940,6 +993,28 @@
               } catch { runStatuses[rec.filename] = 'unknown'; }
             }));
           } finally { runs.loading = false; }
+        };
+
+        const fetchRunsDebounced = () => {
+          if (runsFilterDebounceTimer) clearTimeout(runsFilterDebounceTimer);
+          runsFilterDebounceTimer = setTimeout(fetchRuns, 250);
+        };
+
+        // Auto-refresh: only ticks while runs tab is active AND toggle is on.
+        // 30s cadence — short enough to surface a freshly-finished cron job
+        // before the user reaches for the manual refresh button, slow enough
+        // to not hammer the server.
+        const startRunsAutoRefresh = () => {
+          stopRunsAutoRefresh();
+          runsAutoRefreshTimer = setInterval(() => {
+            if (activeTab.value === 'runs' && runsFilter.autoRefresh) {
+              fetchRuns();
+            }
+          }, 30000);
+        };
+        const stopRunsAutoRefresh = () => {
+          if (runsAutoRefreshTimer) clearInterval(runsAutoRefreshTimer);
+          runsAutoRefreshTimer = null;
         };
 
         // ── channels ──
@@ -1073,17 +1148,36 @@
         };
 
         // ── WeChat QR login flow ──
+        // qrcode-generator (UMD): window.qrcode is a factory.
+        //   qr = qrcode(typeNumber, errorCorrectionLevel)
+        //   qr.addData(text); qr.make();
+        //   qr.createSvgTag(cellSize, margin)   ← we inject SVG so any
+        //                                          width/height responds to
+        //                                          parent layout.
         const renderQrIntoCanvas = (text) => {
-          // Defer to next tick so the canvas ref is mounted (Vue v-if).
+          // Defer to next tick so the container ref is mounted after v-if.
           setTimeout(() => {
-            if (qrCanvas.value && window.QRCode) {
-              window.QRCode.toCanvas(qrCanvas.value, text, {
-                width: 240,
-                margin: 1,
-                color: { dark: '#04050a', light: '#ffffff' },
-              }).catch((e) => console.error('QR render failed', e));
+            if (!qrContainer.value) {
+              loginModal.error = 'QR 容器未挂载（Vue 渲染异常）';
+              return;
             }
-          }, 50);
+            if (typeof window.qrcode !== 'function') {
+              loginModal.error = 'QR 库没加载 — 检查浏览器是否能访问 jsdelivr CDN';
+              return;
+            }
+            try {
+              const qr = window.qrcode(0, 'M');
+              qr.addData(text);
+              qr.make();
+              // 6px cell + 0 margin → ~228px QR; container's padding gives breathing room.
+              qrContainer.value.innerHTML = qr.createSvgTag({
+                cellSize: 6, margin: 0, scalable: false,
+              });
+            } catch (e) {
+              loginModal.error = `QR 渲染失败: ${e.message}`;
+              console.error('QR render failed', e);
+            }
+          }, 60);
         };
 
         const stopLoginPolling = () => {
@@ -1199,6 +1293,7 @@
 
         onMounted(async () => {
           window.addEventListener('keydown', handleKeydown);
+          startRunsAutoRefresh();
           await Promise.all([
             fetchHealth(), fetchWechatAccounts(), fetchChannels(),
             fetchSources(), fetchCron(), fetchRuns(),
@@ -1209,7 +1304,7 @@
           activeTab, tabs, currentTabMeta,
           toasts, dismissToast,
           // wechat login
-          qrCanvas, loginModal, startWechatLogin, closeLoginModal, deleteWechatAccount,
+          qrContainer, loginModal, startWechatLogin, closeLoginModal, deleteWechatAccount,
           health, wechat, channels, sources, cron, runs,
           form, showAddChannel, saveError, testing, testResult,
           showAddCron, cronForm, cronSaveError, cronAction, cronOutput,
@@ -1221,7 +1316,7 @@
           saveSources, resetSources,
           resetCronForm, saveCronJob, deleteCronJob,
           installDispatcher, uninstallDispatcher, runNow, triggerJobNow,
-          fetchRuns, openRun,
+          fetchRuns, fetchRunsDebounced, runsFilter, openRun,
         };
       },
     }).mount('#app');

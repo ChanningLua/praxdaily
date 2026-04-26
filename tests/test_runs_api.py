@@ -34,28 +34,101 @@ def _make_log(tmp_path: Path, filename: str, body: str) -> Path:
 def test_list_runs_empty(tmp_path):
     r = _client(tmp_path).get("/api/runs")
     assert r.status_code == 200
-    assert r.json() == {"runs": []}
+    assert r.json() == {"runs": [], "total": 0, "filtered_total": 0}
 
 
 def test_list_runs_returns_newest_first(tmp_path):
     _make_log(tmp_path, "alpha-20260101-120000.log", "old run")
     _make_log(tmp_path, "alpha-20260425-150000.log", "new run")
     _make_log(tmp_path, "beta-20260301-100000.log", "middle run")
-    runs = _client(tmp_path).get("/api/runs").json()["runs"]
+    data = _client(tmp_path).get("/api/runs").json()
+    runs = data["runs"]
     # Sorted by filename descending — newest timestamp first.
     assert runs[0]["filename"] == "alpha-20260425-150000.log"
     assert runs[-1]["filename"] == "alpha-20260101-120000.log"
     # Each entry carries the parsed name + ISO timestamp.
     assert runs[0]["name"] == "alpha"
     assert runs[0]["started_at"].startswith("2026-04-25T15:00:00")
+    assert data["total"] == 3
+    assert data["filtered_total"] == 3
 
 
 def test_list_runs_skips_unparseable_filenames(tmp_path):
     _make_log(tmp_path, "garbage.log", "x")
     _make_log(tmp_path, "alpha-20260425-150000.log", "ok")
-    runs = _client(tmp_path).get("/api/runs").json()["runs"]
-    assert len(runs) == 1
-    assert runs[0]["name"] == "alpha"
+    data = _client(tmp_path).get("/api/runs").json()
+    assert len(data["runs"]) == 1
+    assert data["runs"][0]["name"] == "alpha"
+    assert data["total"] == 1
+
+
+# ── search / filter ─────────────────────────────────────────────────────────
+
+
+def test_filter_by_name_substring(tmp_path):
+    _make_log(tmp_path, "ai-news-20260425-150000.log", "ok")
+    _make_log(tmp_path, "ai-news-20260425-160000.log", "ok")
+    _make_log(tmp_path, "code-review-20260425-170000.log", "ok")
+    _make_log(tmp_path, "deploy-20260425-180000.log", "ok")
+
+    data = _client(tmp_path).get("/api/runs?name=news").json()
+    assert data["total"] == 4
+    assert data["filtered_total"] == 2
+    assert all("news" in r["name"] for r in data["runs"])
+
+
+def test_filter_by_name_is_case_insensitive(tmp_path):
+    _make_log(tmp_path, "Daily-News-20260425-150000.log", "ok")
+    data = _client(tmp_path).get("/api/runs?name=DAILY").json()
+    assert data["filtered_total"] == 1
+
+
+def test_filter_by_status(tmp_path):
+    _make_log(tmp_path, "alpha-20260425-150000.log", "[prax] model=gpt\n你好")
+    _make_log(tmp_path, "alpha-20260425-160000.log", "[prax] llm_call failure 1/3: ConnectError")
+    _make_log(tmp_path, "alpha-20260425-170000.log", "Traceback (most recent call last):\n  File ...")
+
+    success = _client(tmp_path).get("/api/runs?status=success").json()
+    assert success["filtered_total"] == 1
+
+    failure = _client(tmp_path).get("/api/runs?status=failure").json()
+    assert failure["filtered_total"] == 2
+
+
+def test_filter_combined_name_and_status(tmp_path):
+    _make_log(tmp_path, "ai-news-20260425-150000.log", "[prax] llm_call failure")
+    _make_log(tmp_path, "ai-news-20260425-160000.log", "[prax] model=gpt")
+    _make_log(tmp_path, "deploy-20260425-170000.log", "[prax] llm_call failure")
+
+    data = _client(tmp_path).get("/api/runs?name=news&status=failure").json()
+    assert data["total"] == 3
+    assert data["filtered_total"] == 1
+    assert data["runs"][0]["filename"].startswith("ai-news-20260425-150000")
+
+
+def test_invalid_status_returns_400(tmp_path):
+    r = _client(tmp_path).get("/api/runs?status=garbage")
+    assert r.status_code == 400
+    assert "invalid status filter" in r.json()["detail"]
+
+
+def test_limit_caps_results(tmp_path):
+    for i in range(15):
+        _make_log(tmp_path, f"job-2026042{5}-1500{i:02d}.log", "ok")
+    data = _client(tmp_path).get("/api/runs?limit=5").json()
+    assert data["total"] == 15
+    assert data["filtered_total"] == 15
+    assert len(data["runs"]) == 5
+    # Still newest-first within the cap.
+    assert data["runs"][0]["filename"].endswith("150014.log")
+
+
+def test_limit_clamps_to_1000(tmp_path):
+    """Defensive: even if a caller asks for limit=999999 we don't allocate
+    a giant list."""
+    _make_log(tmp_path, "x-20260425-150000.log", "ok")
+    data = _client(tmp_path).get("/api/runs?limit=999999").json()
+    assert len(data["runs"]) == 1  # only one log existed
 
 
 def test_get_run_returns_content_and_inferred_status_success(tmp_path):
