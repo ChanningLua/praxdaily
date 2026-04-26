@@ -221,10 +221,10 @@
           <h1 class="text-2xl font-semibold tracking-tight">{{ currentTabMeta.title }}</h1>
           <p class="text-sm text-muted mt-1">{{ currentTabMeta.subtitle }}</p>
         </div>
-        <div class="flex items-center gap-2 text-xs text-muted">
+        <button @click="openPalette" class="flex items-center gap-2 text-xs text-muted hover:text-ink transition-colors">
           <span class="kbd">⌘K</span>
-          <span>切换 tab</span>
-        </div>
+          <span>命令面板</span>
+        </button>
       </header>
 
       <!-- ── Top KPI strip (always visible) ───────────────── -->
@@ -726,6 +726,46 @@
       </section>
     </main>
 
+    <!-- ── Command palette (⌘K) ────────────────────────── -->
+    <div v-if="palette.open" class="fixed inset-0 flex items-start justify-center pt-32 z-50" style="background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);" @click.self="closePalette">
+      <div class="glass max-w-xl w-full mx-4 overflow-hidden">
+        <div class="border-b" style="border-color: var(--border);">
+          <input
+            ref="paletteInput"
+            v-model="palette.query"
+            @keydown.esc.prevent="closePalette"
+            @keydown.down.prevent="paletteCursor = Math.min(paletteCursor + 1, paletteFiltered.length - 1)"
+            @keydown.up.prevent="paletteCursor = Math.max(paletteCursor - 1, 0)"
+            @keydown.enter.prevent="runPaletteItem(paletteFiltered[paletteCursor])"
+            placeholder="输入命令、tab 名、任务名 …"
+            class="w-full px-5 py-4 text-base bg-transparent border-0 outline-none"
+            style="background: transparent !important;"
+          />
+        </div>
+        <div class="max-h-96 overflow-auto py-2">
+          <div v-if="paletteFiltered.length === 0" class="text-sm text-muted text-center py-6">
+            没有匹配的命令
+          </div>
+          <div
+            v-for="(item, i) in paletteFiltered"
+            :key="`${item.kind}:${item.id}`"
+            @click="runPaletteItem(item)"
+            @mouseenter="paletteCursor = i"
+            class="px-4 py-2 mx-2 rounded cursor-pointer flex items-center gap-3"
+            :class="{ 'bg-white/5': paletteCursor === i }"
+          >
+            <span class="pill text-xs" :class="paletteKindClass(item.kind)">{{ item.kind }}</span>
+            <span class="flex-1 text-sm">{{ item.label }}</span>
+            <span v-if="item.hint" class="text-xs text-muted">{{ item.hint }}</span>
+          </div>
+        </div>
+        <div class="border-t px-4 py-2 text-xs text-muted flex justify-between" style="border-color: var(--border);">
+          <span><span class="kbd">↑↓</span> 选择 · <span class="kbd">⏎</span> 执行 · <span class="kbd">Esc</span> 关</span>
+          <span>{{ paletteFiltered.length }} 项</span>
+        </div>
+      </div>
+    </div>
+
     <!-- ── WeChat QR login modal ───────────────────────── -->
     <div v-if="loginModal.open" class="fixed inset-0 flex items-center justify-center p-8 z-50" style="background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);" @click.self="closeLoginModal">
       <div class="glass max-w-md w-full">
@@ -835,6 +875,133 @@
           error: '',
           pollTimer: null,
         });
+
+        // ── Command palette ──
+        const palette = reactive({ open: false, query: '' });
+        const paletteCursor = ref(0);
+        const paletteInput = ref(null);
+
+        // Build a flat action list. Computed so it picks up live state
+        // (newly added cron jobs / channels appear instantly).
+        const paletteActions = computed(() => {
+          const acts = [];
+          // tabs
+          for (const [i, t] of tabs.value.entries()) {
+            acts.push({
+              kind: 'tab',
+              id: t.id,
+              label: `打开 ${t.label}`,
+              hint: `⌘${i + 1}`,
+              run: () => { activeTab.value = t.id; },
+            });
+          }
+          // global actions
+          acts.push({
+            kind: '动作',
+            id: 'add-channel',
+            label: '新建通知渠道',
+            hint: '微信 / 飞书 / 邮件',
+            run: () => { activeTab.value = 'channels'; showAddChannel.value = true; },
+          });
+          acts.push({
+            kind: '动作',
+            id: 'add-cron',
+            label: '新建定时任务',
+            hint: '排程 + prompt + 通知',
+            run: () => { activeTab.value = 'cron'; showAddCron.value = true; },
+          });
+          acts.push({
+            kind: '动作',
+            id: 'add-wechat',
+            label: '登录新微信账号',
+            hint: 'QR 扫码',
+            run: () => { activeTab.value = 'wechat'; startWechatLogin(); },
+          });
+          acts.push({
+            kind: '动作',
+            id: 'run-once',
+            label: '跑所有到期任务',
+            hint: 'prax cron run',
+            run: () => { runNow(); },
+          });
+          acts.push({
+            kind: '动作',
+            id: 'install-dispatcher',
+            label: '安装系统调度器',
+            hint: 'LaunchAgent / crontab',
+            run: () => { installDispatcher(); },
+          });
+          // per-job triggers
+          for (const j of cron.list) {
+            acts.push({
+              kind: '任务',
+              id: `trigger:${j.name}`,
+              label: `立即触发任务 ${j.name}`,
+              hint: j.schedule,
+              run: () => { triggerJobNow(j.name); },
+            });
+          }
+          // per-channel test sends
+          for (const ch of channels.list) {
+            acts.push({
+              kind: '渠道',
+              id: `test:${ch.name}`,
+              label: `测发渠道 ${ch.name}`,
+              hint: ch.provider,
+              run: () => { testSend(ch.name); },
+            });
+          }
+          return acts;
+        });
+
+        const paletteFiltered = computed(() => {
+          const q = palette.query.trim().toLowerCase();
+          if (!q) return paletteActions.value;
+          // Naive substring match on label + hint + kind, ranked by
+          // (1) starts-with > contains, (2) shorter label first.
+          const scored = paletteActions.value
+            .map((a) => {
+              const hay = `${a.label} ${a.hint || ''} ${a.kind}`.toLowerCase();
+              if (!hay.includes(q)) return null;
+              const score =
+                (a.label.toLowerCase().startsWith(q) ? 0 : 1) * 100 +
+                a.label.length;
+              return { a, score };
+            })
+            .filter(Boolean)
+            .sort((x, y) => x.score - y.score)
+            .map((s) => s.a);
+          return scored;
+        });
+
+        const paletteKindClass = (kind) => ({
+          'tab': 'pill-acc',
+          '动作': 'pill-warn',
+          '任务': 'pill-ok',
+          '渠道': 'pill-muted',
+        }[kind] || 'pill-muted');
+
+        const openPalette = () => {
+          palette.open = true;
+          palette.query = '';
+          paletteCursor.value = 0;
+          // focus the input on next tick
+          setTimeout(() => paletteInput.value && paletteInput.value.focus(), 50);
+        };
+        const closePalette = () => {
+          palette.open = false;
+          palette.query = '';
+        };
+        const runPaletteItem = (item) => {
+          if (!item) return;
+          closePalette();
+          // Defer a tick so the modal closes visually before the action
+          // (e.g. opening another modal) starts.
+          setTimeout(() => item.run(), 0);
+        };
+
+        // Reset cursor when filter changes
+        Vue.watch(() => palette.query, () => { paletteCursor.value = 0; });
 
         // ── Toast system ──
         const toasts = ref([]);
@@ -1276,10 +1443,17 @@
 
         // ── Keyboard shortcuts ──
         const handleKeydown = (e) => {
-          // Esc closes any open modal
+          // Esc closes any open modal (palette > QR > run viewer)
           if (e.key === 'Escape') {
+            if (palette.open) { closePalette(); e.preventDefault(); return; }
             if (loginModal.open) { closeLoginModal(); e.preventDefault(); return; }
             if (viewedRun.value) { viewedRun.value = null; e.preventDefault(); return; }
+          }
+          // Cmd/Ctrl + K → command palette
+          if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+            e.preventDefault();
+            if (palette.open) closePalette(); else openPalette();
+            return;
           }
           // Cmd/Ctrl + 1..6 → switch tab
           if ((e.metaKey || e.ctrlKey) && e.key >= '1' && e.key <= '6') {
@@ -1303,6 +1477,10 @@
         return {
           activeTab, tabs, currentTabMeta,
           toasts, dismissToast,
+          // command palette
+          palette, paletteCursor, paletteInput,
+          paletteFiltered, paletteKindClass,
+          openPalette, closePalette, runPaletteItem,
           // wechat login
           qrContainer, loginModal, startWechatLogin, closeLoginModal, deleteWechatAccount,
           health, wechat, channels, sources, cron, runs,
