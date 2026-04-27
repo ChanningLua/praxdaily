@@ -25,17 +25,23 @@ def _client(tmp_path: Path) -> TestClient:
 
 
 def test_get_sources_returns_defaults_when_no_file(tmp_path):
-    """A fresh cwd must return the same defaults the skill would use, so
-    the GUI shows users 'this is what would happen right now'."""
+    """A fresh cwd must return the new pipeline-aligned defaults: only
+    sources with native scrapers enabled (HN), the rest disabled until
+    we add scrapers for them."""
     r = _client(tmp_path).get("/api/sources")
     assert r.status_code == 200
     data = r.json()
     assert data["is_user_config_present"] is False
-    ids = [s["id"] for s in data["sources"]]
-    assert ids == ["twitter", "zhihu", "bilibili", "hackernews"]
-    # Defaults match SKILL.md's embedded values.
-    assert all(s["enabled"] for s in data["sources"])
+    by_id = {s["id"]: s for s in data["sources"]}
+    assert set(by_id) == {"twitter", "zhihu", "bilibili", "hackernews"}
+    # HN is the only source with a working native scraper today.
+    assert by_id["hackernews"]["enabled"] is True
+    assert by_id["twitter"]["enabled"] is False
+    assert by_id["zhihu"]["enabled"] is False
+    assert by_id["bilibili"]["enabled"] is False
+    # Tightened keyword list — broad terms like "智能体"/"agent" removed.
     assert "AI" in data["keywords"]["include"]
+    assert "大模型" in data["keywords"]["include"]
 
 
 def test_put_writes_yaml_in_skill_compatible_shape(tmp_path):
@@ -85,9 +91,9 @@ def test_get_after_put_layers_user_over_defaults(tmp_path):
     # User override applied
     assert by_id["twitter"]["enabled"] is False
     assert by_id["twitter"]["limit"] == 100
-    # Defaults preserved for rows the user didn't touch
-    assert by_id["zhihu"]["enabled"] is True
-    assert by_id["bilibili"]["enabled"] is True
+    # Defaults preserved for rows the user didn't touch — hackernews stays
+    # enabled (the one source with a working native scraper).
+    assert by_id["hackernews"]["enabled"] is True
 
 
 def test_put_rejects_duplicate_source_ids(tmp_path):
@@ -149,7 +155,8 @@ def test_delete_resets_to_defaults(tmp_path):
     # GET now returns DEFAULTS again
     data = client.get("/api/sources").json()
     assert data["is_user_config_present"] is False
-    assert data["sources"][0]["enabled"] is True  # twitter back to enabled
+    by_id = {s["id"]: s for s in data["sources"]}
+    assert by_id["hackernews"]["enabled"] is True   # default-enabled source
     assert "AI" in data["keywords"]["include"]
 
 

@@ -26,15 +26,27 @@ router = APIRouter(prefix="/api/sources", tags=["sources"])
 # Mirrors the DEFAULTS embedded in
 # src/prax/skills/ai-news-daily/SKILL.md Step 1.5 — keep in sync.
 DEFAULT_SOURCES: list[dict[str, Any]] = [
-    {"id": "twitter", "enabled": True, "limit": 50, "top_n": 10},
-    {"id": "zhihu", "enabled": True, "limit": 30, "top_n": 10},
-    {"id": "bilibili", "enabled": True, "limit": 20, "top_n": 5},
-    {"id": "hackernews", "enabled": True, "limit": 20, "top_n": 10},
+    # Twitter/Zhihu need login state — no native scraper yet, kept here so
+    # the sources.yaml shape doesn't churn when we add them later.
+    {"id": "twitter",   "enabled": False, "limit": 50, "top_n": 5, "min_metric": 0},
+    {"id": "zhihu",     "enabled": False, "limit": 30, "top_n": 5, "min_metric": 0},
+    # B 站 "popular" API is dominated by gaming/anime; even strict AI
+    # keyword filtering gives 0-2 hits per day. Off by default — opt in
+    # if you want broad popular signal.
+    {"id": "bilibili",  "enabled": False, "limit": 20, "top_n": 5, "min_metric": 100_000},
+    # HN front page goes from ~1000 (top story) down to single digits.
+    # top_n=5 = the 5 most-upvoted AI-related stories from today's
+    # front page. min_metric=100 keeps the bar above "barely noticed".
+    {"id": "hackernews","enabled": True,  "limit": 30, "top_n": 5, "min_metric": 100},
 ]
 DEFAULT_KEYWORDS: dict[str, list[str]] = {
+    # Precise AI-domain terms only. Loose words like "推理" / "agent" /
+    # "智能体" match gaming-context content (推理小说 / 角色 agent /
+    # 智能匹配 features), so they're left out.
     "include": [
-        "AI", "LLM", "GPT", "Claude", "模型", "智能体",
-        "agent", "RAG", "推理", "微调", "transformer",
+        "AI", "AGI", "LLM", "GPT", "Claude", "Anthropic", "OpenAI",
+        "大模型", "RAG", "微调", "transformer", "diffusion",
+        "neural", "embedding", "vector",
     ],
     "exclude": [],
 }

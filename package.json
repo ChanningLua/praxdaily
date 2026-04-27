@@ -1,7 +1,7 @@
 {
   "name": "praxdaily",
-  "version": "0.6.2",
-  "description": "Self-hosted AI daily digest — local web panel that wires Prax's ai-news-daily skill to WeChat. Hermes-equivalent, runs on your laptop.",
+  "version": "0.7.0",
+  "description": "Self-hosted AI daily digest — native HackerNews scraper, deterministic pipeline, push to your personal WeChat. Local-first, zero SaaS deps.",
   "bin": {
     "praxdaily": "bin/praxdaily.js"
   },

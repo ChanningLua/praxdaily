@@ -5,6 +5,104 @@ All notable changes to praxdaily will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-04-27
+
+### Architecture rewrite — daily-digest is now native, no LLM in the data path
+
+Pre-0.7, scheduled runs and "立即触发" both shelled out to `prax prompt`
+which had the LLM follow `ai-news-daily` SKILL.md instructions —
+including running AutoCLI / tmux for scraping. That path was flaky:
+AutoCLI is a third-party tool with Chrome-extension dependencies, the
+LLM hit circuit breakers, and on rare occasions the LLM would
+recursively re-invoke `praxdaily run-now` itself (infinite loop).
+Real end-to-end success rate was effectively zero.
+
+0.7 replaces the data path with deterministic Python:
+
+- **Native scrapers** (`src/praxdaily/scrapers/{hn,bilibili}.py`) —
+  pure httpx + JSON, no external CLI, no Chrome extension. HackerNews
+  via the public Firebase API. B 站 via the popular API (off by
+  default — its content is heavily gaming/anime which fails AI
+  keyword filtering).
+- **`pipeline.run()`** — scrape → keyword filter → top-N by metric
+  → render markdown → push notify. Async-aware so the FastAPI route
+  awaits it directly.
+- **`praxdaily-owned LaunchAgent`** (`src/praxdaily/scheduler.py`) —
+  installs `~/Library/LaunchAgents/com.praxdaily.daily.plist` that
+  invokes `praxdaily run-now` on schedule. Both manual and scheduled
+  runs share the same code path → behaviour is consistent.
+
+Manual trigger (`POST /api/cron/{name}/trigger-now`) auto-detects
+"ai-news-daily"-style prompts and routes to the native pipeline;
+any other prompt still shells out to prax for back-compat.
+
+### Added
+
+- **`praxdaily install-schedule [--time HH:MM]`** / `uninstall-schedule`
+  / `schedule-status` CLI commands.
+- **`/api/schedule`** routes — same operations as the CLI, plus
+  legacy `prax cron` dispatcher detection
+  (`POST /api/schedule/uninstall-legacy-prax-cron`).
+- **GUI cron tab** got a "每日定时" card replacing the prax-cron-based
+  install/uninstall buttons. Auto-detects the legacy
+  `dev.prax.cron.dispatcher` plist and offers a "清理旧调度器" button
+  so users running both versions don't get duplicate triggers.
+- **Settings tab (⌘7)** — three friendly cards for OpenAI / Anthropic
+  / GLM API keys + per-provider `base_url` override (for relays).
+  Writes to `<cwd>/.prax/.env` and `~/.prax/models.yaml`. Detects
+  and warns when a workspace-level `.prax/models.yaml` shadows
+  user-level config (the `/init-models` ghost-file footgun fixed in
+  praxagent 0.5.5 but still surfaced here for older installs).
+  "测一下" button probes the relay's `/models` and falls back to
+  `/chat/completions` to catch URL typos (missing `/v1`, etc.).
+- **Channel form rewrite** — visual provider cards (📱 我的微信 /
+  💼 企业微信群 / 🚀 飞书 / 🌍 Lark) with auto-suggested channel
+  names and "advanced options" collapsed by default. Replaces the
+  previous dev-style `provider/account_id/to/title 前缀` form that
+  non-technical users couldn't parse.
+- **Trigger-now sends notify on success/failure** matching the cron
+  dispatcher behaviour, so "立即触发" actually validates the whole
+  push chain end-to-end.
+- **Per-job `model` field on cron** — pin a job to a specific model
+  (e.g. `gpt-5.4`) to avoid prax's tier-routing escalating to a
+  model that's missing credentials. Surfaces in the cron form.
+- **Multi-message wechat send with retry** — long digests are split
+  into chunks (per source), sent ~2s apart with up to 3 retries on
+  iLink `ret=-2` ("session context lost") errors.
+
+### Changed
+
+- **`praxdaily run-now`** uses `pipeline.run()` directly. No more
+  `prax prompt` shell-out. Exits 0 on full success, 1 on push
+  failure, 2 on pre-scrape fatal error.
+- **Default sources** — only HackerNews enabled by default. Twitter,
+  Zhihu, Bilibili are disabled because they need login state
+  (X / 知乎) or have a too gaming-heavy popular feed (B 站).
+  Schema kept so they can be enabled when scrapers ship later.
+- **Default keywords tightened** — removed `推理` / `agent` /
+  `智能体` (matched gaming/anime contexts) in favour of precise
+  terms like `大模型 / Anthropic / OpenAI / RAG / transformer`.
+  Short ASCII keywords like `AI` / `AGI` now match at word
+  boundaries (fixes `AGI` → `MAGIC` substring false-positives).
+- **HN min_metric default = 100** — only stories with ≥100 upvotes
+  count as "today's hot". Configurable per-source in `sources.yaml`.
+
+### Migration
+
+If you set up praxdaily before 0.7.0, open the GUI cron tab — it
+will show an orange warning banner if the legacy
+`dev.prax.cron.dispatcher` plist is installed. Click
+**清理旧调度器** then **安装定时** in the "每日定时" card. Then
+**立即触发** to verify end-to-end.
+
+CLI equivalent:
+
+```bash
+launchctl unload ~/Library/LaunchAgents/dev.prax.cron.dispatcher.plist
+rm ~/Library/LaunchAgents/dev.prax.cron.dispatcher.plist
+praxdaily install-schedule --time 14:00 --cwd ~/your-project
+```
+
 ## [0.6.2] - 2026-04-25
 
 ### Polish (3 product-feel improvements, no functional change)

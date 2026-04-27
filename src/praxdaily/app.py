@@ -62,12 +62,14 @@ def create_app(cwd: Path) -> FastAPI:
 
     # Mount API route modules.
     from .routes import (
-        channels_router, cron_router, runs_router, sources_router,
-        wechat_router, workspaces_router,
+        channels_router, cron_router, runs_router, schedule_router,
+        settings_router, sources_router, wechat_router, workspaces_router,
     )
     app.include_router(channels_router)
     app.include_router(cron_router)
     app.include_router(runs_router)
+    app.include_router(schedule_router)
+    app.include_router(settings_router)
     app.include_router(sources_router)
     app.include_router(wechat_router)
     app.include_router(workspaces_router)

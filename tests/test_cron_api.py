@@ -216,4 +216,119 @@ def test_trigger_now_shells_out_to_prax_prompt_with_job_prompt(tmp_path):
     args = mock_run.call_args.args[0]
     assert args[:3] == ["/fake/prax", "prompt", "用一句话问候我"]
     assert "--permission-mode" in args
-    assert "workspace-write" in args
+    assert "danger-full-access" in args
+
+
+# ── 0.7: trigger-now must also fire notify so users can verify the chain ─────
+
+
+def _setup_job_with_notify(client, tmp_path, *, notify_on, notify_channel):
+    """Helper: create channel `wechat-self` + job wired to it."""
+    client.put(
+        f"/api/channels/{notify_channel}",
+        json={"provider": "feishu_webhook", "url": "https://example.com/hook"},
+    )
+    client.put(
+        "/api/cron/news",
+        json={
+            "schedule": "0 17 * * *",
+            "prompt": "fetch ai news",
+            "notify_on": notify_on,
+            "notify_channel": notify_channel,
+        },
+    )
+
+
+def test_trigger_now_sends_notify_on_success(tmp_path):
+    client = _client(tmp_path)
+    _setup_job_with_notify(client, tmp_path, notify_on=["success", "failure"], notify_channel="wechat-self")
+
+    fake_proc = type("P", (), {"returncode": 0, "stdout": "done", "stderr": ""})()
+    sent = {}
+
+    class _StubProvider:
+        async def send(self, *, title, body, level):
+            sent["title"] = title; sent["body"] = body; sent["level"] = level
+
+    with patch("praxdaily.routes.cron.shutil.which", return_value="/fake/prax"), \
+         patch("praxdaily.routes.cron.subprocess.run", return_value=fake_proc), \
+         patch("prax.tools.notify.build_provider", return_value=_StubProvider()):
+        r = client.post("/api/cron/news/trigger-now")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["notify"]["sent"] is True
+    assert body["notify"]["channel"] == "wechat-self"
+    assert body["notify"]["outcome"] == "success"
+    # The provider got called with a useful title/body the user can read.
+    assert "✓" in sent["title"] and "news" in sent["title"]
+    assert sent["level"] == "info"
+
+
+def test_trigger_now_sends_notify_on_failure(tmp_path):
+    client = _client(tmp_path)
+    _setup_job_with_notify(client, tmp_path, notify_on=["failure"], notify_channel="wechat-self")
+
+    fake_proc = type("P", (), {"returncode": 1, "stdout": "", "stderr": "401 Unauthorized"})()
+
+    class _StubProvider:
+        sent_level = None
+        async def send(self, *, title, body, level):
+            type(self).sent_level = level
+
+    with patch("praxdaily.routes.cron.shutil.which", return_value="/fake/prax"), \
+         patch("praxdaily.routes.cron.subprocess.run", return_value=fake_proc), \
+         patch("prax.tools.notify.build_provider", return_value=_StubProvider()):
+        r = client.post("/api/cron/news/trigger-now")
+    assert r.status_code == 200
+    assert r.json()["notify"]["sent"] is True
+    assert _StubProvider.sent_level == "error"
+
+
+def test_trigger_now_skips_notify_when_outcome_not_in_notify_on(tmp_path):
+    """If notify_on=[failure] only and the run succeeds, must NOT spam."""
+    client = _client(tmp_path)
+    _setup_job_with_notify(client, tmp_path, notify_on=["failure"], notify_channel="wechat-self")
+
+    fake_proc = type("P", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+    with patch("praxdaily.routes.cron.shutil.which", return_value="/fake/prax"), \
+         patch("praxdaily.routes.cron.subprocess.run", return_value=fake_proc):
+        r = client.post("/api/cron/news/trigger-now")
+    body = r.json()
+    assert body["notify"]["sent"] is False
+    assert "not in notify_on" in body["notify"]["reason"]
+
+
+def test_trigger_now_skips_notify_when_no_channel_configured(tmp_path):
+    client = _client(tmp_path)
+    client.put(
+        "/api/cron/lone",
+        json={"schedule": "0 17 * * *", "prompt": "x"},
+    )
+    fake_proc = type("P", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+    with patch("praxdaily.routes.cron.shutil.which", return_value="/fake/prax"), \
+         patch("praxdaily.routes.cron.subprocess.run", return_value=fake_proc):
+        r = client.post("/api/cron/lone/trigger-now")
+    assert r.json()["notify"]["sent"] is False
+
+
+def test_trigger_now_notify_failure_does_not_500(tmp_path):
+    """If notify itself blows up, we still return 200 with the prompt result —
+    user should see that the run worked even if push failed."""
+    client = _client(tmp_path)
+    _setup_job_with_notify(client, tmp_path, notify_on=["success"], notify_channel="wechat-self")
+
+    fake_proc = type("P", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+
+    class _BoomProvider:
+        async def send(self, **kw):
+            raise RuntimeError("network down")
+
+    with patch("praxdaily.routes.cron.shutil.which", return_value="/fake/prax"), \
+         patch("praxdaily.routes.cron.subprocess.run", return_value=fake_proc), \
+         patch("prax.tools.notify.build_provider", return_value=_BoomProvider()):
+        r = client.post("/api/cron/news/trigger-now")
+    assert r.status_code == 200
+    notify = r.json()["notify"]
+    assert notify["sent"] is False
+    assert "RuntimeError" in notify["error"]
+    assert "network down" in notify["error"]

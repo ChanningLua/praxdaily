@@ -217,15 +217,29 @@ async def run_once_now(request: Request) -> JSONResponse:
     return JSONResponse({"dispatched": True, "output": output})
 
 
+_AI_NEWS_TRIGGER_TOKENS = ("ai-news-daily", "ai日报", "ai 日报", "每日简报", "每日 ai", "daily digest")
+
+
+def _is_ai_news_daily_prompt(prompt: str) -> bool:
+    """Detect whether this prompt is targeting the flagship daily-digest
+    workflow, regardless of phrasing. Liberal matching is fine — false
+    positives just route through the deterministic pipeline (which is
+    arguably better than the LLM path for any 'fetch+summarize+push'
+    request anyway)."""
+    p = prompt.lower()
+    return any(t in p for t in _AI_NEWS_TRIGGER_TOKENS)
+
+
 @router.post("/{name}/trigger-now")
 async def trigger_job_now(name: str, request: Request) -> JSONResponse:
     """Force-run one job's prompt RIGHT NOW, ignoring its schedule.
 
-    Goes through `prax prompt <prompt>` directly with workspace-write —
-    same code path the cron dispatcher uses for the actual subprocess.
-    Bypasses notify_on/notify_channel because the user explicitly
-    triggered it and is staring at the GUI; if they want a notify they
-    can hit "立刻跑一次" instead (which respects schedule + notify).
+    For the flagship `ai-news-daily` prompt we run praxdaily's native
+    pipeline (deterministic Python scrapers + direct notify). The old
+    "shell out to prax + LLM follows skill instructions" path was too
+    flaky — autocli/Chrome dependencies, circuit breakers, recursive
+    self-invocation. For any other prompt, fall back to shelling out
+    to prax so user-added jobs still work.
     """
     import shutil
     import subprocess
@@ -240,6 +254,39 @@ async def trigger_job_now(name: str, request: Request) -> JSONResponse:
     if not prompt:
         raise HTTPException(status_code=400, detail=f"job {name!r} has empty prompt")
 
+    # Native fast path for ai-news-daily trigger phrases.
+    if _is_ai_news_daily_prompt(prompt):
+        from .. import pipeline
+        result = await pipeline.run(cwd=cwd)
+        # Map pipeline result onto the same response shape the GUI already
+        # expects from trigger-now (triggered/exit_code/output_tail/notify).
+        ok = not result.fatal_error and result.notify.get("sent")
+        summary_lines = [
+            f"started: {result.started_at} → {result.finished_at}",
+            f"digest: {result.digest_chars} chars → {result.digest_path}",
+        ]
+        for sr in result.sources:
+            if not sr.enabled:
+                summary_lines.append(f"  - {sr.id}: disabled (skipped)")
+            elif sr.error:
+                summary_lines.append(f"  ✗ {sr.id}: {sr.error}")
+            else:
+                summary_lines.append(f"  ✓ {sr.id}: fetched={sr.fetched} kept={sr.kept}")
+        if result.fatal_error:
+            summary_lines.append(f"FATAL: {result.fatal_error}")
+        if result.notify:
+            summary_lines.append(f"notify: {result.notify}")
+        return JSONResponse(
+            {
+                "triggered": True,
+                "name": name,
+                "exit_code": 0 if ok else 1,
+                "output_tail": "\n".join(summary_lines),
+                "notify": result.notify,
+                "pipeline": result.to_dict(),
+            }
+        )
+
     prax = shutil.which("prax")
     if prax is None:
         raise HTTPException(
@@ -247,7 +294,18 @@ async def trigger_job_now(name: str, request: Request) -> JSONResponse:
             detail="prax CLI not on PATH — install with `npm install -g praxagent`",
         )
 
-    argv = [prax, "prompt", prompt, "--permission-mode", "workspace-write"]
+    # Use danger-full-access for ad-hoc triggers because realistic skill
+    # work (ai-news-daily uses tmux + autocli + Chrome state) trips
+    # workspace-write's InteractiveBash gate. The user clicked "立即触发"
+    # so they explicitly opted into "run the whole pipeline" — matching
+    # what they'd want at scheduled time too.
+    argv = [prax, "prompt", prompt, "--permission-mode", "danger-full-access"]
+    # If the job pinned a model, pass it so trigger-now matches the cron
+    # dispatcher behaviour (otherwise prax tier-routing might escalate to
+    # an unconfigured model and 401).
+    job_model = str(job.get("model") or "").strip()
+    if job_model:
+        argv += ["--model", job_model]
     try:
         proc = subprocess.run(
             argv, cwd=str(cwd), capture_output=True, text=True, timeout=600
@@ -259,11 +317,59 @@ async def trigger_job_now(name: str, request: Request) -> JSONResponse:
         )
 
     output = (proc.stdout or proc.stderr or "").strip()
+    notify_status = await _maybe_send_notify(cwd, job, proc.returncode, output)
+
     return JSONResponse(
         {
             "triggered": True,
             "name": name,
             "exit_code": proc.returncode,
             "output_tail": output[-2000:],
+            "notify": notify_status,
         }
     )
+
+
+async def _maybe_send_notify(cwd, job: dict, exit_code: int, output: str) -> dict[str, Any]:
+    """Mirror the cron dispatcher's notify behaviour for ad-hoc triggers.
+
+    Returns a status dict the GUI can show: whether a notify was attempted,
+    which channel, and any error. Never raises — a notify failure must not
+    flip the trigger response into 5xx, since the prompt itself succeeded.
+    """
+    triggers = [str(t).strip().lower() for t in (job.get("notify_on") or [])]
+    channel_name = str(job.get("notify_channel") or "").strip()
+    if not triggers or not channel_name:
+        return {"sent": False, "reason": "no notify_on or notify_channel configured"}
+
+    outcome = "success" if exit_code == 0 else "failure"
+    if outcome not in triggers:
+        return {"sent": False, "reason": f"outcome={outcome} not in notify_on={triggers}"}
+
+    # Lazy imports — keep startup time clean and let the route 503 cleanly
+    # if praxagent isn't installed.
+    try:
+        from prax.tools.notify import build_provider  # type: ignore
+    except ImportError as exc:
+        return {"sent": False, "channel": channel_name, "error": f"praxagent not importable: {exc}"}
+
+    from .channels import _load_channels
+    channels = _load_channels(cwd)
+    if channel_name not in channels:
+        return {"sent": False, "channel": channel_name, "error": "channel not found in notify.yaml"}
+
+    try:
+        provider = build_provider(channels[channel_name])
+    except ValueError as exc:
+        return {"sent": False, "channel": channel_name, "error": str(exc)}
+
+    title = f"{'✓' if exit_code == 0 else '✗'} {job.get('name')} 触发{'成功' if exit_code == 0 else '失败'} (exit {exit_code})"
+    # Trim body to the tail of stdout — same as cron dispatcher does, so
+    # what arrives in WeChat matches what the user would see at scheduled time.
+    body = output[-1500:] if output else "(no output)"
+    try:
+        await provider.send(title=title, body=body, level=("info" if exit_code == 0 else "error"))
+    except Exception as exc:  # noqa: BLE001 — we want any error surfaced as status, not 500
+        return {"sent": False, "channel": channel_name, "error": f"{type(exc).__name__}: {exc}"}
+
+    return {"sent": True, "channel": channel_name, "outcome": outcome}

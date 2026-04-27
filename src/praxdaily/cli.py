@@ -49,6 +49,30 @@ def build_parser() -> argparse.ArgumentParser:
         help="Project directory holding .prax/ (defaults to current dir)",
     )
 
+    p_install = sub.add_parser(
+        "install-schedule",
+        help="Install a daily LaunchAgent that runs `praxdaily run-now` at the given time",
+    )
+    p_install.add_argument(
+        "--time", default="14:00",
+        help="Daily fire time as HH:MM (24h, default 14:00)",
+    )
+    p_install.add_argument(
+        "--cwd",
+        default=None,
+        help="Project directory the schedule should run against (defaults to current dir)",
+    )
+
+    sub.add_parser(
+        "uninstall-schedule",
+        help="Remove the praxdaily LaunchAgent",
+    )
+
+    sub.add_parser(
+        "schedule-status",
+        help="Show whether the praxdaily schedule is installed + when it fires",
+    )
+
     return parser
 
 
@@ -79,6 +103,31 @@ def main() -> None:
         cwd = Path(args.cwd or Path.cwd()).resolve()
         rc = run_once(cwd=cwd)
         sys.exit(rc)
+
+    if args.command == "install-schedule":
+        from . import scheduler
+        import json as _json
+
+        cwd = Path(args.cwd or Path.cwd()).resolve()
+        sched = scheduler.Schedule.parse_hhmm(args.time)
+        result = scheduler.install(schedule=sched, cwd=cwd)
+        print(_json.dumps(result, indent=2, ensure_ascii=False))
+        sys.exit(0 if result.get("launchctl_returncode") == 0 else 1)
+
+    if args.command == "uninstall-schedule":
+        from . import scheduler
+        import json as _json
+
+        result = scheduler.uninstall()
+        print(_json.dumps(result, indent=2, ensure_ascii=False))
+        sys.exit(0)
+
+    if args.command == "schedule-status":
+        from . import scheduler
+        import json as _json
+
+        print(_json.dumps(scheduler.status(), indent=2, ensure_ascii=False))
+        sys.exit(0)
 
     raise SystemExit(1)
 
