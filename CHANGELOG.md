@@ -5,6 +5,49 @@ All notable changes to praxdaily will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-04-28
+
+Polish pass — everything that would have made a fresh reader stop and
+go "wait what?" in the 0.7.0 walkthrough is now handled.
+
+### Added
+
+- **「最近一份日报」preview card on the overview tab** — reads the most
+  recent `<workspace>/.prax/vault/<date>/daily-digest.md` and renders
+  it inline. Auto-refreshes after every 立即触发. Solves the "did
+  WeChat actually receive what I think I pushed?" question without
+  making the user open WeChat or `cat` files.
+- **`GET /api/runs/latest-digest`** endpoint backing the above.
+  Picks the newest date directory; gracefully skips empty / failed
+  ones; defends against the `/{filename}` route shadowing it.
+- **Friendly fix-step UI when push fails with iLink `ret=-2`** —
+  pipeline now classifies the error and returns
+  `{hint_kind, hint_title, hint_steps}`. The trigger-result panel
+  shows the steps as an ordered list inside an orange callout instead
+  of the raw `RuntimeError` traceback. Same treatment for
+  "wechat account not registered" errors.
+
+### Changed
+
+- **Setup checklist on overview rewritten** to match 0.7's
+  architecture: (1) install praxagent CLI, (2) login WeChat,
+  (3) configure channel, (4) install daily schedule. Each unchecked
+  item now has a "去这步 →" jump button. The success card now points
+  users at the cron tab's 立即触发 button as the end-to-end smoke test.
+- **Trigger-now's success/fail headline reflects notify reality** —
+  exit-code 0 with `notify.sent: false` no longer reads as a green
+  success. Headline changes to "⚠ 跑完了但推送失败：<hint title>"
+  when known fixable, "✗ 退出 N" otherwise.
+- **Cron tab subtitle + buttons rewritten** for the new
+  praxdaily-owned schedule. The leftover "跑所有到期" / cronOutput pre /
+  the install/uninstall buttons that drove the old prax cron
+  dispatcher are gone (or replaced).
+
+### Tests
+
+178 unit tests pass (10 new for latest-digest + 5 for the error
+classifier). 6 e2e gated as before.
+
 ## [0.7.0] - 2026-04-27
 
 ### Architecture rewrite — daily-digest is now native, no LLM in the data path

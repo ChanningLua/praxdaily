@@ -335,6 +335,66 @@ def test_push_retries_chunk_on_transient_failure(monkeypatch):
     assert len(provider.calls) == 4
 
 
+def test_classify_session_lost_attaches_actionable_hint():
+    cfg = {"provider": "wechat_personal", "account_id": "abc@im.bot"}
+    result = pipeline._classify_send_error(
+        RuntimeError("iLink 拒收 (ret=-2)：bot 没有和该 user_id 的会话上下文"),
+        cfg,
+    )
+    assert result["hint_kind"] == "wechat_session_lost"
+    assert result["hint_title"]
+    # Steps should be specific and actionable, not generic.
+    joined = "\n".join(result["hint_steps"])
+    assert "微信" in joined and "ping" in joined
+    # Account ID surfaces so user knows which bot to ping.
+    assert "abc@im.bot" in joined
+
+
+def test_classify_returns_empty_for_non_wechat_channel():
+    """Don't generate wechat hints for feishu/lark errors."""
+    cfg = {"provider": "feishu_webhook", "url": "https://x"}
+    result = pipeline._classify_send_error(RuntimeError("ret=-2"), cfg)
+    assert result == {}
+
+
+def test_classify_account_not_found():
+    cfg = {"provider": "wechat_personal", "account_id": "abc"}
+    result = pipeline._classify_send_error(
+        ValueError("channel wechat_personal: account 'abc' not found"),
+        cfg,
+    )
+    assert result["hint_kind"] == "wechat_account_missing"
+    assert any("微信账号" in s for s in result["hint_steps"])
+
+
+def test_classify_unknown_error_returns_empty():
+    """Errors we can't translate should produce no hint, not a misleading one."""
+    cfg = {"provider": "wechat_personal", "account_id": "abc"}
+    result = pipeline._classify_send_error(RuntimeError("connect timeout"), cfg)
+    assert result == {}
+
+
+def test_push_attaches_hint_when_chunk_fails_with_session_lost(monkeypatch):
+    """End-to-end: when retries exhaust on ret=-2, the response should
+    carry the friendly hint dict so the GUI can render fix steps."""
+    async def _no_sleep(_): return None
+    monkeypatch.setattr(pipeline.asyncio, "sleep", _no_sleep)
+
+    class _Provider:
+        async def send(self, *, title, body, level):
+            raise RuntimeError("iLink 拒收 (ret=-2): 会话上下文掉了")
+
+    monkeypatch.setattr("prax.tools.notify.build_provider", lambda cfg: _Provider())
+    result = _async_run(pipeline._push_chunks(
+        "wechat-self",
+        {"provider": "wechat_personal", "account_id": "abc@im.bot"},
+        chunks=["A"],
+    ))
+    assert result["sent"] is False
+    assert result["hint_kind"] == "wechat_session_lost"
+    assert "abc@im.bot" in str(result["hint_steps"])
+
+
 def test_push_gives_up_after_3_attempts_per_chunk(monkeypatch):
     async def _no_sleep(_): return None
     monkeypatch.setattr(pipeline.asyncio, "sleep", _no_sleep)

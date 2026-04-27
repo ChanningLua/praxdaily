@@ -177,3 +177,64 @@ def test_get_run_blocks_path_traversal(tmp_path):
 def test_get_run_rejects_dotdot_prefix(tmp_path):
     r = _client(tmp_path).get("/api/runs/..hidden.log")
     assert r.status_code == 400
+
+
+# ── 0.7.1: latest-digest preview ───────────────────────────────────────────
+
+
+def _make_digest(tmp_path: Path, date: str, content: str) -> Path:
+    vault = tmp_path / ".prax" / "vault" / date
+    vault.mkdir(parents=True, exist_ok=True)
+    p = vault / "daily-digest.md"
+    p.write_text(content, encoding="utf-8")
+    return p
+
+
+def test_latest_digest_returns_present_false_when_no_vault(tmp_path):
+    r = _client(tmp_path).get("/api/runs/latest-digest")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["present"] is False
+    assert "no vault" in body["reason"]
+
+
+def test_latest_digest_returns_today_when_one_run(tmp_path):
+    _make_digest(tmp_path, "2026-04-27", "# AI 日报\n\ntoday's content")
+    r = _client(tmp_path).get("/api/runs/latest-digest")
+    body = r.json()
+    assert body["present"] is True
+    assert body["date"] == "2026-04-27"
+    assert "today's content" in body["content"]
+    assert body["chars"] == len(body["content"])
+
+
+def test_latest_digest_picks_newest_when_multiple_dates(tmp_path):
+    """Sort by ISO date string (works as wall-clock for YYYY-MM-DD)."""
+    _make_digest(tmp_path, "2026-04-25", "old")
+    _make_digest(tmp_path, "2026-04-27", "newest")
+    _make_digest(tmp_path, "2026-04-26", "middle")
+    body = _client(tmp_path).get("/api/runs/latest-digest").json()
+    assert body["date"] == "2026-04-27"
+    assert "newest" in body["content"]
+
+
+def test_latest_digest_skips_empty_date_dirs(tmp_path):
+    """If a date folder exists but no daily-digest.md inside (run failed
+    before write), fall through to the next-newest with content."""
+    (tmp_path / ".prax" / "vault" / "2026-04-27").mkdir(parents=True)  # empty
+    _make_digest(tmp_path, "2026-04-26", "yesterday's content")
+    body = _client(tmp_path).get("/api/runs/latest-digest").json()
+    assert body["present"] is True
+    assert body["date"] == "2026-04-26"
+
+
+def test_latest_digest_does_not_collide_with_filename_route(tmp_path):
+    """Regression guard: the /{filename} route once swallowed
+    /latest-digest as a filename. Both should work independently."""
+    _make_log(tmp_path, "job-20260427-140000.log", "log body")
+    _make_digest(tmp_path, "2026-04-27", "digest body")
+
+    r1 = _client(tmp_path).get("/api/runs/latest-digest")
+    r2 = _client(tmp_path).get("/api/runs/job-20260427-140000.log")
+    assert r1.status_code == 200 and "digest body" in r1.json()["content"]
+    assert r2.status_code == 200 and "log body" in r2.json()["content"]

@@ -313,15 +313,40 @@
               <span class="font-mono w-5 text-center mt-0.5" :class="s.done ? 'text-ok' : 'text-muted'">
                 {{ s.done ? '✓' : (i + 1) }}
               </span>
-              <div :class="s.done ? 'text-ink' : 'text-muted'">
+              <div class="flex-1" :class="s.done ? 'text-ink' : 'text-muted'">
                 <div :class="s.done ? '' : 'font-medium text-ink'">{{ s.label }}</div>
                 <div v-if="!s.done" class="text-xs text-muted mt-0.5">{{ s.hint }}</div>
               </div>
+              <button v-if="!s.done && s.jumpTab" @click="activeTab = s.jumpTab" class="btn-link text-xs whitespace-nowrap">
+                去这步 →
+              </button>
             </li>
           </ol>
-          <p v-if="setupChecklist.every(s => s.done)" class="mt-4 text-sm text-ok">
-            ✓ 全部就绪 — 切到"定时任务"屏点"立即触发"测试一次。
-          </p>
+          <div v-if="allSetupDone" class="mt-4 rounded-lg p-3" style="background: rgba(61, 222, 157, 0.06); border: 1px solid rgba(61, 222, 157, 0.4);">
+            <div class="text-sm text-ok font-semibold">✓ 全部就绪</div>
+            <div class="text-xs text-muted mt-1">
+              切到「定时任务」屏点 cron 任务的「立即触发」做一次端到端测试 —— 应该收到一条「📅 AI 日报 · 今日」开头的微信消息。
+            </div>
+          </div>
+        </div>
+
+        <!-- Today's digest preview — only shown after a run has actually
+             produced a daily-digest.md, otherwise the empty state would
+             clutter a first-time user's overview. -->
+        <div v-if="latestDigest.present" class="glass p-6">
+          <div class="flex justify-between items-start mb-3">
+            <div>
+              <h2 class="text-lg font-semibold">最近一份日报</h2>
+              <p class="text-sm text-muted mt-0.5">
+                {{ latestDigest.date }} · {{ latestDigest.chars }} 字 · 这就是推到你微信的内容
+              </p>
+            </div>
+            <button @click="fetchLatestDigest" class="btn-link text-xs">刷新</button>
+          </div>
+          <pre class="text-xs font-mono p-4 rounded-xl whitespace-pre-wrap max-h-96 overflow-auto" style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border); line-height: 1.6;">{{ latestDigest.content }}</pre>
+          <div class="mt-2 text-xs text-muted">
+            归档路径：<code>{{ latestDigest.path }}</code>
+          </div>
         </div>
 
         <div class="glass p-6">
@@ -589,17 +614,13 @@
             <div>
               <h2 class="text-lg font-semibold">定时任务</h2>
               <p class="text-sm text-muted mt-1">
-                到点 <code>prax cron</code> 调度器自动跑，完成后按上面渠道推。
+                到点 macOS LaunchAgent 自动调 <code>praxdaily run-now</code> 跑日报。
+                每个任务可以单独点「立即触发」做端到端测试。
               </p>
             </div>
-            <div class="space-x-2">
-              <button @click="runNow" :disabled="cronAction === 'run'" class="btn-ghost">
-                {{ cronAction === 'run' ? '触发中…' : '跑所有到期' }}
-              </button>
-              <button @click="showAddCron = !showAddCron" class="btn-primary">
-                {{ showAddCron ? '取消' : '+ 新增任务' }}
-              </button>
-            </div>
+            <button @click="showAddCron = !showAddCron" class="btn-primary">
+              {{ showAddCron ? '取消' : '+ 新增任务' }}
+            </button>
           </div>
 
           <!-- praxdaily 自己的 LaunchAgent（替换了原来基于 prax cron 的方案） -->
@@ -646,9 +667,18 @@
           </div>
 
           <!-- triggerResult tail (full output) stays here for inspection; brief toast fires separately -->
-          <div v-if="triggerResult && triggerResult.tail" class="mb-4 p-3 rounded-xl text-sm border" :class="triggerResult.ok ? 'border-ok' : 'border-danger'" :style="{ background: triggerResult.ok ? 'rgba(61, 222, 157, 0.06)' : 'rgba(255, 109, 141, 0.06)' }">
+          <div v-if="triggerResult" class="mb-4 p-3 rounded-xl text-sm border" :class="triggerResult.ok ? 'border-ok' : 'border-danger'" :style="{ background: triggerResult.ok ? 'rgba(61, 222, 157, 0.06)' : 'rgba(255, 109, 141, 0.06)' }">
             <div class="font-medium mb-2" :class="triggerResult.ok ? 'text-ok' : 'text-danger'">{{ triggerResult.headline }}</div>
-            <pre class="text-xs font-mono p-2 rounded max-h-40 overflow-auto whitespace-pre-wrap" style="background: rgba(0,0,0,0.3);">{{ triggerResult.tail }}</pre>
+
+            <!-- Friendly fix steps for known transport errors (iLink ret=-2 etc.) -->
+            <div v-if="triggerResult.hint_kind && triggerResult.hint_steps && triggerResult.hint_steps.length" class="mt-2 mb-3 rounded-lg p-3 text-xs" style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.4);">
+              <div class="text-warn font-semibold mb-2">怎么修</div>
+              <ol class="space-y-1 ml-4 list-decimal text-muted">
+                <li v-for="(step, i) in triggerResult.hint_steps" :key="i">{{ step }}</li>
+              </ol>
+            </div>
+
+            <pre v-if="triggerResult.tail" class="text-xs font-mono p-2 rounded max-h-40 overflow-auto whitespace-pre-wrap" style="background: rgba(0,0,0,0.3);">{{ triggerResult.tail }}</pre>
           </div>
 
           <div v-if="showAddCron" class="rounded-xl border p-4 mb-4 space-y-3" style="border-color: var(--border); background: rgba(255,255,255,0.02);">
@@ -1283,17 +1313,10 @@
           });
           acts.push({
             kind: '动作',
-            id: 'run-once',
-            label: '跑所有到期任务',
-            hint: 'prax cron run',
-            run: () => { runNow(); },
-          });
-          acts.push({
-            kind: '动作',
-            id: 'install-dispatcher',
-            label: '安装系统调度器',
-            hint: 'LaunchAgent / crontab',
-            run: () => { installDispatcher(); },
+            id: 'install-schedule',
+            label: '安装每日定时',
+            hint: schedule.timeInput || '14:00',
+            run: () => { activeTab.value = 'cron'; },
           });
           // per-job triggers
           for (const j of cron.list) {
@@ -1396,6 +1419,8 @@
         const KNOWN_SOURCE_IDS = ['twitter', 'zhihu', 'bilibili', 'hackernews'];
         const isKnownSourceId = (id) => KNOWN_SOURCE_IDS.includes(id);
 
+        const latestDigest = reactive({ present: false, date: '', chars: 0, path: '', content: '' });
+
         const cron = reactive({ loading: true, list: [] });
         const schedule = reactive({
           praxdaily: { installed: false, schedule: '', cwd: '', loaded: false },
@@ -1411,8 +1436,6 @@
           notifyOnSuccess: false, notifyOnFailure: true, notifyChannel: '',
         });
         const cronSaveError = ref('');
-        const cronAction = ref('');
-        const cronOutput = ref('');
         const triggering = ref(null);
         const triggerResult = ref(null);
 
@@ -1457,14 +1480,20 @@
           const hasPrax = !!health.data.prax_on_path;
           const hasWechat = wechat.accounts.length > 0;
           const hasChannel = channels.list.length > 0;
-          const hasCron = cron.list.length > 0;
+          const hasSchedule = !!schedule.praxdaily.installed;
           return [
-            { done: hasPrax,    label: '安装 prax CLI',     hint: '终端跑 npm install -g praxagent' },
-            { done: hasWechat,  label: '登录个人微信',       hint: '终端跑 prax wechat login 用微信扫码' },
-            { done: hasChannel, label: '配一个推送渠道',     hint: '左侧"通知渠道"屏点 + 新增' },
-            { done: hasCron,    label: '加一个定时任务',     hint: '左侧"定时任务"屏点 + 新增' },
+            { done: hasPrax,     label: '安装 praxagent CLI',    hint: '终端跑 npm install -g praxagent（用来登录 / 推送微信）',
+              jumpTab: null },
+            { done: hasWechat,   label: '登录个人微信',           hint: '点左侧 ⌘2「微信账号」→「+ 登录新账号」扫码',
+              jumpTab: 'wechat' },
+            { done: hasChannel,  label: '配一个推送渠道',         hint: '点左侧 ⌘3「通知渠道」→「+ 新增渠道」选「我的微信」',
+              jumpTab: 'channels' },
+            { done: hasSchedule, label: '安装每日定时',           hint: '点左侧 ⌘5「定时任务」顶部「每日定时」卡片 → 选时间 → 安装',
+              jumpTab: 'cron' },
           ];
         });
+
+        const allSetupDone = computed(() => setupChecklist.value.every(s => s.done));
 
         const tabs = computed(() => [
           { id: 'overview', label: '概览',     icon: ICON.overview, badge: null,
@@ -1825,20 +1854,15 @@
           await fetch(`/api/cron/${encodeURIComponent(name)}`, { method: 'DELETE' });
           await fetchCron();
         };
-        const dispatcherAction = async (path, action) => {
-          cronAction.value = action; cronOutput.value = '';
-          try {
-            const r = await fetch(`/api/cron/${path}`, { method: 'POST' });
-            const d = await r.json();
-            cronOutput.value = r.ok ? `✓ ${action} OK\n${d.output || ''}` : `✗ ${action} 失败：${d.detail || r.statusText}`;
-            if (path === 'run-once') await fetchRuns();
-          } finally { cronAction.value = ''; }
-        };
-        const installDispatcher = () => dispatcherAction('install', 'install');
-        const uninstallDispatcher = () => dispatcherAction('uninstall', 'uninstall');
-        const runNow = () => dispatcherAction('run-once', 'run');
-
         // ── praxdaily-owned schedule (LaunchAgent) ──
+        const fetchLatestDigest = async () => {
+          try {
+            const r = await fetch('/api/runs/latest-digest');
+            const d = await r.json();
+            Object.assign(latestDigest, d);
+          } catch { /* fail silently — overview's other sections still render */ }
+        };
+
         const fetchSchedule = async () => {
           try {
             const r = await fetch('/api/schedule');
@@ -1887,18 +1911,35 @@
             const r = await fetch(`/api/cron/${encodeURIComponent(name)}/trigger-now`, { method: 'POST' });
             const d = await r.json();
             if (r.ok) {
-              const ok = d.exit_code === 0;
+              // The pipeline can return exit_code=0 with notify failed —
+              // surface that as failure too, so users aren't misled by
+              // a green "exit 0" when wechat actually didn't get the push.
+              const notify = d.notify || {};
+              const ok = d.exit_code === 0 && notify.sent !== false;
+              const headline = ok
+                ? `✓ "${name}" 触发完成 + 微信已推送`
+                : (notify.hint_kind
+                    ? `⚠ "${name}" 跑完了但推送失败：${notify.hint_title || ''}`
+                    : `✗ "${name}" 退出 ${d.exit_code}`);
               triggerResult.value = {
                 ok,
-                headline: ok ? `✓ "${name}" 触发完成 (exit 0)` : `✗ "${name}" 退出 ${d.exit_code}`,
+                headline,
                 tail: d.output_tail || '',
+                hint_kind: notify.hint_kind || '',
+                hint_title: notify.hint_title || '',
+                hint_steps: notify.hint_steps || [],
               };
-              showToast(ok ? `任务 "${name}" 触发完成` : `任务 "${name}" 退出 ${d.exit_code}（详见下方输出）`, ok ? 'success' : 'error');
+              showToast(
+                ok ? `任务 "${name}" 完成，已推送微信`
+                   : (notify.hint_kind ? `推送失败：${notify.hint_title}` : `任务 "${name}" 退出 ${d.exit_code}`),
+                ok ? 'success' : 'error',
+                ok ? 4000 : 8000,
+              );
             } else {
               triggerResult.value = { ok: false, headline: `✗ ${d.detail || r.statusText}`, tail: '' };
               showToast(`触发失败: ${d.detail || r.statusText}`, 'error', 6000);
             }
-            await fetchRuns();
+            await Promise.all([fetchRuns(), fetchLatestDigest()]);
           } finally { triggering.value = null; }
         };
 
@@ -2068,7 +2109,7 @@
           await Promise.all([
             fetchHealth(), fetchWorkspaces(), fetchWechatAccounts(),
             fetchChannels(), fetchSources(), fetchCron(), fetchRuns(),
-            fetchEnvSettings(), fetchSchedule(),
+            fetchEnvSettings(), fetchSchedule(), fetchLatestDigest(),
           ]);
         });
 
@@ -2089,17 +2130,18 @@
           envSettings, doctor, fetchEnvSettings, saveEnvKey, deleteEnvKey, runDoctor,
           saveProviderUrl, resetProviderUrl, probeProviderUrl, cleanupWorkspaceYaml,
           form, showAddChannel, saveError, testing, testResult,
-          showAddCron, cronForm, cronSaveError, cronAction, cronOutput,
+          showAddCron, cronForm, cronSaveError,
           triggering, triggerResult, runStatuses, viewedRun,
           savingSources, sourcesSaveResult,
           truncate, formatStarted, isKnownSourceId, compiledSchedule,
-          setupChecklist,
+          setupChecklist, allSetupDone,
           PROVIDER_OPTIONS, selectProvider, providerMeta, suggestedChannelName, isFormValid,
           resetForm, saveChannel, deleteChannel, testSend,
           saveSources, resetSources,
           resetCronForm, saveCronJob, deleteCronJob,
-          installDispatcher, uninstallDispatcher, runNow, triggerJobNow,
+          triggerJobNow,
           schedule, fetchSchedule, installSchedule, uninstallSchedule, cleanupLegacyPraxCron,
+          latestDigest, fetchLatestDigest,
           fetchRuns, fetchRunsDebounced, runsFilter, openRun,
         };
       },

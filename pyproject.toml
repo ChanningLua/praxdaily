@@ -1,6 +1,6 @@
 [project]
 name = "praxdaily"
-version = "0.7.0"
+version = "0.7.1"
 description = "Self-hosted AI daily digest — native HackerNews scraper + deterministic pipeline + personal WeChat push"
 readme = "README.md"
 requires-python = ">=3.10"

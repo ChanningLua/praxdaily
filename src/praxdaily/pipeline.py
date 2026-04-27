@@ -360,6 +360,39 @@ async def run(*, cwd) -> PipelineResult:
     return result
 
 
+def _classify_send_error(exc: Exception, channel_cfg: dict) -> dict[str, Any]:
+    """Translate raw provider exceptions into actionable hint dicts.
+
+    The GUI renders ``hint_kind`` specially (e.g. with a "怎么修" button).
+    Plain string matching on ``str(exc)`` is fine here — these tokens come
+    from prax's own error formatter and are stable.
+    """
+    msg = str(exc)
+    is_wechat = (channel_cfg or {}).get("provider") == "wechat_personal"
+    if is_wechat and ("ret=-2" in msg or "会话上下文" in msg):
+        account_id = (channel_cfg or {}).get("account_id", "")
+        return {
+            "hint_kind": "wechat_session_lost",
+            "hint_title": "iLink bot 会话上下文掉了 (ret=-2)",
+            "hint_steps": [
+                "打开微信，找到 bot 联系人",
+                f"给它发任意一句话（比如 ping）{('— 账号 ' + account_id) if account_id else ''}",
+                "回 praxdaily 重新点「立即触发」即可",
+            ],
+        }
+    if is_wechat and "account" in msg.lower() and "not found" in msg.lower():
+        return {
+            "hint_kind": "wechat_account_missing",
+            "hint_title": "微信账号没登录",
+            "hint_steps": [
+                "切到「微信账号」屏",
+                "点「+ 登录新账号」用微信扫码登录",
+                "回到这里再点「立即触发」",
+            ],
+        }
+    return {}
+
+
 async def _push_chunks(channel_name: str, channel_cfg: dict, *, chunks: list[str]) -> dict:
     """Send the digest as multiple chat messages.
 
@@ -379,7 +412,9 @@ async def _push_chunks(channel_name: str, channel_cfg: dict, *, chunks: list[str
     try:
         provider = build_provider(channel_cfg)
     except ValueError as exc:
-        return {"sent": False, "channel": channel_name, "error": str(exc)}
+        payload = {"sent": False, "channel": channel_name, "error": str(exc)}
+        payload.update(_classify_send_error(exc, channel_cfg))
+        return payload
 
     sent_count = 0
     sent_chars = 0
@@ -400,11 +435,13 @@ async def _push_chunks(channel_name: str, channel_cfg: dict, *, chunks: list[str
             except Exception as exc:  # noqa: BLE001
                 last_exc = exc
         if last_exc is not None:
-            return {
+            payload: dict[str, Any] = {
                 "sent": False, "channel": channel_name,
                 "error": f"chunk {i+1}/{len(chunks)} failed after retries: {type(last_exc).__name__}: {last_exc}",
                 "chunks_sent": sent_count, "chunks_total": len(chunks),
             }
+            payload.update(_classify_send_error(last_exc, channel_cfg))
+            return payload
         sent_count += 1
         sent_chars += len(chunk)
 

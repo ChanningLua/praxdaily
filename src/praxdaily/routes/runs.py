@@ -158,6 +158,47 @@ async def list_runs(
     )
 
 
+def _vault_dir(cwd) -> Path:
+    import os as _os
+    return Path(_os.fspath(cwd)) / ".prax" / "vault"
+
+
+@router.get("/latest-digest")
+def get_latest_digest(request: Request) -> JSONResponse:
+    """Return the most recent `daily-digest.md` if any.
+
+    Used by the overview tab to show users what got pushed last — the
+    most common question after a fresh setup is "did wechat actually
+    receive my digest?", and this is the in-GUI answer.
+
+    Important: must be registered BEFORE the `/{filename}` route below,
+    otherwise the path-param route catches `latest-digest` as a filename.
+    """
+    cwd = request.app.state.cwd
+    vault = _vault_dir(cwd)
+    if not vault.exists():
+        return JSONResponse({"present": False, "reason": "no vault dir yet (no run completed)"})
+
+    # Each run writes to <vault>/<YYYY-MM-DD>/daily-digest.md. Pick the
+    # newest by date directory name (ISO sorting works as wall-clock).
+    date_dirs = sorted([p for p in vault.iterdir() if p.is_dir()], reverse=True)
+    for d in date_dirs:
+        digest = d / "daily-digest.md"
+        if digest.exists():
+            try:
+                content = digest.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            return JSONResponse({
+                "present": True,
+                "date": d.name,
+                "path": str(digest),
+                "chars": len(content),
+                "content": content,
+            })
+    return JSONResponse({"present": False, "reason": "vault dir exists but no daily-digest.md inside"})
+
+
 @router.get("/{filename}")
 async def get_run(filename: str, request: Request) -> JSONResponse:
     """Return one log file's content + inferred status.
@@ -198,3 +239,5 @@ async def get_run(filename: str, request: Request) -> JSONResponse:
             "content": body,
         }
     )
+
+
