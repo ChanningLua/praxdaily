@@ -9,8 +9,10 @@ in the prax repo.
 
 from __future__ import annotations
 
+import logging
 import shutil
 import subprocess
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -20,14 +22,41 @@ from fastapi.staticfiles import StaticFiles
 from . import __version__
 
 
+logger = logging.getLogger(__name__)
 WEB_DIR = Path(__file__).parent / "web"
 
 
 def create_app(cwd: Path) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        # Spin up the iLink getupdates pullers — one per logged-in account.
+        # The inbound_callback wires the daily_qa app to the platform layer:
+        # whenever a real user reply lands and binds to an active user, we
+        # dispatch it through daily_qa.handle for command processing.
+        from .apps import daily_qa
+        from .bridge.ilink_pull import PullerManager
+
+        manager = PullerManager(cwd, inbound_callback=daily_qa.handle)
+        app.state.puller_manager = manager
+        try:
+            actions = await manager.sync_with_accounts()
+            if actions:
+                logger.info("PullerManager started: %s", actions)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("PullerManager failed to start: %s", exc)
+        try:
+            yield
+        finally:
+            try:
+                await manager.stop_all()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("PullerManager shutdown error: %s", exc)
+
     app = FastAPI(
         title="praxdaily",
         version=__version__,
         description="Local web panel for Prax's ai-news-daily flagship workflow.",
+        lifespan=lifespan,
     )
     # ``app.state.cwd`` is the *server-launch* default. The active
     # workspace is chosen separately and looked up via
@@ -62,9 +91,11 @@ def create_app(cwd: Path) -> FastAPI:
 
     # Mount API route modules.
     from .routes import (
-        channels_router, cron_router, runs_router, schedule_router,
-        settings_router, sources_router, wechat_router, workspaces_router,
+        bridge_router, channels_router, cron_router, runs_router,
+        schedule_router, settings_router, sources_router, wechat_router,
+        wechat_webhook_router, workspaces_router,
     )
+    app.include_router(bridge_router)
     app.include_router(channels_router)
     app.include_router(cron_router)
     app.include_router(runs_router)
@@ -72,6 +103,7 @@ def create_app(cwd: Path) -> FastAPI:
     app.include_router(settings_router)
     app.include_router(sources_router)
     app.include_router(wechat_router)
+    app.include_router(wechat_webhook_router)
     app.include_router(workspaces_router)
 
     @app.get("/api/health")

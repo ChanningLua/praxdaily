@@ -1,0 +1,63 @@
+# praxdaily — Caddy reverse-proxy + automatic HTTPS.
+#
+# Drop this on a host that has Caddy installed and a DNS A/AAAA record
+# pointing to it. Caddy will auto-provision LetsEncrypt certs.
+#
+# Quick start (assuming docker-compose stack is running locally on the
+# same host):
+#
+#   1. Edit `daily.example.com` below to your real domain.
+#   2. (Recommended even for showcase) Set BASIC_AUTH_USER /
+#      BASIC_AUTH_HASH env vars before running Caddy. Generate hash:
+#         caddy hash-password -p 'your-password-here'
+#   3. caddy run --config Caddyfile
+#
+# What this gets you:
+#   - Automatic HTTPS (LetsEncrypt) for daily.example.com
+#   - HTTP → HTTPS redirect
+#   - Reverse proxy to the praxdaily container at :7878
+#   - Optional basic auth for the admin dashboard (subscribe page is
+#     public — adjust if you want to gate that too)
+
+{
+    # Global options (uncomment to use a staging cert during testing)
+    # acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+
+    # Email is required by some ACME providers
+    email admin@example.com
+}
+
+daily.example.com {
+    # Subscribe page (where friends scan to subscribe). Gate-free so
+    # users with a QR scan link don't hit a login wall first.
+    # Adjust paths if you eventually add a separate subscribe UI.
+    @subscribe path /api/bridge/binding/qr-poll /subscribe*
+    handle @subscribe {
+        reverse_proxy 127.0.0.1:7878
+    }
+
+    # Admin dashboard + every other route → require basic auth.
+    # Generate hash: caddy hash-password -p 'YourPassword'
+    handle {
+        basic_auth {
+            # Format: username  bcrypt-hash
+            # Replace with your own — example only.
+            admin $2a$14$Zkx9Kq/.6TXqvN9nL4Y4q.OKQfYUaBf3Y5wbSJVx3qg9c1lZKvU0G
+        }
+        reverse_proxy 127.0.0.1:7878
+    }
+
+    # Sensible defaults
+    encode gzip
+    log {
+        output file /var/log/caddy/praxdaily.log
+        format console
+    }
+
+    # Header tweaks — block clickjacking + restrict referrers
+    header {
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        X-Content-Type-Options "nosniff"
+    }
+}

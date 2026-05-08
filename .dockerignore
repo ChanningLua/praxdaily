@@ -1,0 +1,29 @@
+# Don't bake build noise into the image — keep it lean.
+.git
+.github
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+node_modules
+.DS_Store
+.idea
+.vscode
+
+# Workspace data — must not leak into the image; mount at runtime instead.
+workspace
+.prax/vault
+.prax/logs
+.prax/bridge.db
+.prax/sessions
+.prax/runs
+
+# Secrets — extra-paranoid double-deny in case they sneak in.
+.env
+**/*.env
+.prax/wechat
+.prax/notify.yaml.bak

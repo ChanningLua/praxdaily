@@ -407,6 +407,100 @@
         </div>
       </section>
 
+      <!-- ── Tab: 订阅者 (subscribers) ────────────────────── -->
+      <section v-if="activeTab === 'subscribers'" class="space-y-6 tab-anim">
+        <div class="glass p-6">
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <h2 class="text-lg font-semibold">日报订阅者</h2>
+              <p class="text-sm text-muted mt-1">
+                所有通过扫码订阅日报的用户。每天 cron 触发后会一对多推送。
+              </p>
+            </div>
+            <div class="flex gap-2">
+              <button @click="fetchSubs" class="btn-ghost text-xs">↻ 刷新</button>
+              <button @click="openQrModal" class="btn-primary text-xs">+ 邀请订阅</button>
+            </div>
+          </div>
+
+          <div v-if="subsState.list.length === 0" class="empty-state">
+            <div class="empty-title">还没有订阅者</div>
+            <div class="empty-hint">点上方 <span class="text-acc">+ 邀请订阅</span> 生成扫码二维码给朋友</div>
+          </div>
+          <table v-else class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-muted text-xs uppercase tracking-wide">
+                <th class="pb-2 font-normal">app_user_id</th>
+                <th class="pb-2 font-normal">via bot</th>
+                <th class="pb-2 font-normal">订阅日期</th>
+                <th class="pb-2 font-normal">收/发</th>
+                <th class="pb-2 font-normal">最近活跃</th>
+                <th class="pb-2 font-normal text-right"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="b in subsState.list" :key="b.binding_id" class="table-row border-t" style="border-color: var(--border);">
+                <td class="py-3 font-mono text-xs">{{ b.app_user_id }}</td>
+                <td class="py-3 font-mono text-xs text-muted">{{ truncate(b.bot_wxid, 28) }}</td>
+                <td class="py-3 text-xs text-muted">{{ formatStarted(b.created_at) }}</td>
+                <td class="py-3 text-xs">
+                  <span class="text-acc">↓ {{ b.msgs_in }}</span>
+                  &nbsp;<span class="text-ok">↑ {{ b.msgs_out }}</span>
+                </td>
+                <td class="py-3 text-xs text-muted">{{ formatStarted(b.last_activity_at) || '—' }}</td>
+                <td class="py-3 text-right">
+                  <button @click="expireSubscriber(b)" class="btn-link danger">退订</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- iLink 长轮询状态 -->
+        <div class="glass p-6">
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <h2 class="text-lg font-semibold">iLink 长轮询（getupdates）</h2>
+              <p class="text-sm text-muted mt-1">
+                每个登录的 iLink 账号都有一个后台 puller 在拉取入站消息。
+                正常时 polls_total 大约每 18 秒涨 1。msgs_routed 是已成功投递给 daily_qa 的用户回复数。
+              </p>
+            </div>
+            <button @click="syncPullers" class="btn-ghost text-xs">↻ 同步账号</button>
+          </div>
+
+          <div v-if="subsState.pullers.length === 0" class="empty-state">
+            <div class="empty-title">还没有 iLink 账号在跑</div>
+            <div class="empty-hint">先去「微信账号」屏扫码登录</div>
+          </div>
+          <table v-else class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-muted text-xs uppercase tracking-wide">
+                <th class="pb-2 font-normal">account_id</th>
+                <th class="pb-2 font-normal">user_id (wxid)</th>
+                <th class="pb-2 font-normal">running</th>
+                <th class="pb-2 font-normal">polls</th>
+                <th class="pb-2 font-normal">msgs (recv/route)</th>
+                <th class="pb-2 font-normal">last_error</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="p in subsState.pullers" :key="p.account_id" class="table-row border-t" style="border-color: var(--border);">
+                <td class="py-3 font-mono text-xs">{{ truncate(p.account_id, 24) }}</td>
+                <td class="py-3 font-mono text-xs text-muted">{{ truncate(p.user_id, 30) }}</td>
+                <td class="py-3"><span class="pill" :class="p.running ? 'pill-ok' : 'pill-danger'">{{ p.running ? 'running' : 'stopped' }}</span></td>
+                <td class="py-3 text-xs">{{ p.polls_total }}</td>
+                <td class="py-3 text-xs">
+                  {{ p.msgs_total }} / <span class="text-ok">{{ p.msgs_routed }}</span>
+                  <span v-if="p.msgs_unmatched > 0" class="text-warn">+{{ p.msgs_unmatched }} 未匹配</span>
+                </td>
+                <td class="py-3 text-xs text-danger">{{ truncate(p.last_error, 40) || '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- ── Tab: 通知渠道 ─────────────────────────────── -->
       <section v-if="activeTab === 'channels'" class="space-y-6 tab-anim">
         <div class="glass p-6">
@@ -1111,6 +1205,68 @@
       </div>
     </div>
 
+    <!-- ── QR binding modal ────────────────────────────── -->
+    <div v-if="qrBindModal.open" class="fixed inset-0 flex items-center justify-center p-8 z-50" style="background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);" @click.self="closeQrModal">
+      <div class="glass max-w-md w-full">
+        <div class="flex justify-between items-center p-5 border-b" style="border-color: var(--border);">
+          <div>
+            <h3 class="font-semibold">邀请订阅日报</h3>
+            <p class="text-xs text-muted mt-0.5">为新订阅者生成扫码二维码 — 用微信扫一下即可订阅</p>
+          </div>
+          <button @click="closeQrModal" class="text-muted hover:text-ink text-xl leading-none">✕</button>
+        </div>
+
+        <!-- Stage 1: 输入 app_user_id -->
+        <div v-if="qrBindModal.stage === 'form'" class="p-6 space-y-4">
+          <div>
+            <label class="text-xs text-muted block mb-1">订阅者 ID（手机号 / 邮箱 / 任意标识）</label>
+            <input v-model="qrBindModal.app_user_id" placeholder="例如 alice 或 13800138000" class="w-full px-3 py-2 text-sm font-mono" />
+            <p class="text-xs text-muted mt-1">
+              这是你给订阅者的内部标识，后续退订、查询等操作要用。同一个 ID 重复绑定会替换之前的微信号。
+            </p>
+          </div>
+          <div v-if="qrBindModal.error" class="text-sm text-danger">{{ qrBindModal.error }}</div>
+          <div class="flex justify-end gap-2 pt-2">
+            <button @click="closeQrModal" class="btn-ghost">取消</button>
+            <button @click="generateQr" :disabled="qrBindModal.generating" class="btn-primary">
+              {{ qrBindModal.generating ? '生成中…' : '生成二维码' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Stage 2: 真实 iLink 扫码 (用户用微信直接扫) -->
+        <div v-else-if="qrBindModal.stage === 'qr'" class="p-6 text-center">
+          <div ref="qrBindContainer" class="bg-white rounded-xl p-4 inline-block mb-3" style="min-width: 248px; min-height: 248px;"></div>
+          <div class="text-sm mb-3">
+            用 <span class="font-semibold text-ink">微信</span> 扫描上面这个二维码 →
+            微信会弹"登录提示"，点确认即可完成绑定。
+          </div>
+          <div class="text-sm py-2 border-t" style="border-color: var(--border);">
+            <span v-if="qrBindModal.status === 'wait'" class="text-muted">
+              <span class="pulse">●</span> 等待扫码…
+            </span>
+            <span v-else-if="qrBindModal.status === 'scaned'" class="text-acc">
+              ✓ 已扫码，请在微信里点确认
+            </span>
+            <span v-else-if="qrBindModal.status === 'confirmed'" class="text-ok">
+              ✓ 订阅成功！{{ qrBindModal.app_user_id }} 已加入日报
+            </span>
+            <span v-else-if="qrBindModal.status === 'expired'" class="text-warn">
+              二维码已过期 — <button @click="generateQr" class="btn-link">重新生成</button>
+            </span>
+            <span v-else class="text-muted">{{ qrBindModal.status }}</span>
+          </div>
+          <p class="text-xs text-muted mt-3">
+            提示：扫码会让你的微信注册成 iLink 协议账号——这是当前 demo 复用 iLink 登录 QR 实现"扫码绑定"的副作用。
+            消息推送仍走原 clawbot，不影响你正常用微信。
+          </p>
+          <div class="flex justify-end gap-2 pt-4">
+            <button @click="closeQrModal" class="btn-ghost text-sm">关闭</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Toast container (bottom-right) ──────────────── -->
     <div class="fixed bottom-6 right-6 z-50 space-y-2 pointer-events-none">
       <div
@@ -1165,6 +1321,7 @@
       cron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
       runs: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
       settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+      subscribers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M3 21v-1a7 7 0 0 1 14 0v1"/><path d="M19 8a3 3 0 0 0 0 6"/><polyline points="22 11 19 14 17 12"/></svg>',
     };
 
     createApp({
@@ -1495,6 +1652,158 @@
 
         const allSetupDone = computed(() => setupChecklist.value.every(s => s.done));
 
+        // ── Daily-digest subscribers + iLink puller status ──
+        const subsState = reactive({
+          loading: false,
+          list: [],
+          pullers: [],
+        });
+        const fetchSubs = async () => {
+          subsState.loading = true;
+          try {
+            const [subs, pullers] = await Promise.all([
+              fetch('/api/bridge/subscribers').then(r => r.json()),
+              fetch('/api/bridge/pullers').then(r => r.json()),
+            ]);
+            subsState.list = subs.subscribers || [];
+            subsState.pullers = pullers.pullers || [];
+          } catch {} finally { subsState.loading = false; }
+        };
+        const expireSubscriber = async (b) => {
+          if (!confirm(`强制退订 ${b.app_user_id}？用户下次收不到日报。`)) return;
+          const r = await fetch(`/api/bridge/subscribers/${b.binding_id}`, { method: 'DELETE' });
+          if (!r.ok) { showToast('退订失败', 'error'); return; }
+          showToast(`已退订 ${b.app_user_id}`, 'info');
+          await fetchSubs();
+        };
+        const syncPullers = async () => {
+          const r = await fetch('/api/bridge/pullers/sync', { method: 'POST' });
+          if (!r.ok) { showToast('同步 puller 失败', 'error'); return; }
+          showToast('已同步 puller 与登录账号', 'info');
+          await fetchSubs();
+        };
+
+        // ── QR bind modal (used by subscribers tab "邀请订阅") ──
+        const qrBindContainer = ref(null);
+        const qrBindModal = reactive({
+          open: false,
+          stage: 'form',                 // 'form' | 'qr'
+          app_user_id: '',
+          generating: false,
+          error: '',
+          token: '',
+          persona_name: '',
+          expires_at: '',
+          base_url: '',
+          status: 'wait',                // wait | scaned | confirmed | expired
+          pollTimer: null,
+        });
+
+        const renderQrIntoNode = (node, text) => {
+          setTimeout(() => {
+            if (!node) return;
+            if (typeof window.qrcode !== 'function') return;
+            try {
+              const qr = window.qrcode(0, 'M');
+              qr.addData(text);
+              qr.make();
+              node.innerHTML = qr.createSvgTag({ cellSize: 6, margin: 0, scalable: false });
+            } catch (e) { console.error('QR render failed', e); }
+          }, 60);
+        };
+
+        const stopQrPolling = () => {
+          if (qrBindModal.pollTimer) {
+            clearTimeout(qrBindModal.pollTimer);
+            qrBindModal.pollTimer = null;
+          }
+        };
+
+        const openQrModal = () => {
+          stopQrPolling();
+          qrBindModal.open = true;
+          qrBindModal.stage = 'form';
+          qrBindModal.app_user_id = '';
+          qrBindModal.error = '';
+          qrBindModal.token = '';
+          qrBindModal.status = 'wait';
+        };
+
+        const closeQrModal = () => {
+          stopQrPolling();
+          qrBindModal.open = false;
+        };
+
+        const pollQrStatus = async () => {
+          if (!qrBindModal.token || !qrBindModal.open) return;
+          try {
+            const r = await fetch('/api/bridge/binding/qr-poll', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                token: qrBindModal.token,
+                base_url: qrBindModal.base_url || undefined,
+              }),
+            });
+            const d = await r.json();
+            if (r.ok) {
+              qrBindModal.status = d.status || 'wait';
+              if (d.status === 'scaned_but_redirect' && d.next_base_url) {
+                qrBindModal.base_url = d.next_base_url;
+                qrBindModal.status = 'scaned';
+              }
+              if (d.status === 'confirmed') {
+                showToast(`已订阅: ${qrBindModal.app_user_id}`, 'success');
+                await fetchSubs();
+                setTimeout(() => {
+                  if (qrBindModal.status === 'confirmed') closeQrModal();
+                }, 2000);
+                return;
+              }
+              if (d.status === 'expired') {
+                stopQrPolling();
+                return;
+              }
+            }
+          } catch {}
+          qrBindModal.pollTimer = setTimeout(pollQrStatus, 2000);
+        };
+
+        const generateQr = async () => {
+          if (!qrBindModal.app_user_id) {
+            qrBindModal.error = '订阅者 ID 必填';
+            return;
+          }
+          qrBindModal.error = '';
+          qrBindModal.generating = true;
+          try {
+            const r = await fetch('/api/bridge/binding/qr-start', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ app_user_id: qrBindModal.app_user_id }),
+            });
+            const d = await r.json();
+            if (!r.ok) {
+              qrBindModal.error = d.detail || `生成失败 (${r.status})`;
+              return;
+            }
+            qrBindModal.token = d.token;
+            qrBindModal.persona_name = d.persona_name || '日报';
+            qrBindModal.expires_at = (d.expires_at || '').replace('T', ' ');
+            qrBindModal.base_url = d.base_url || '';
+            qrBindModal.status = 'wait';
+            qrBindModal.stage = 'qr';
+            const scanText = d.qrcode_url || d.qrcode_value;
+            setTimeout(() => renderQrIntoNode(qrBindContainer.value, scanText), 80);
+            stopQrPolling();
+            qrBindModal.pollTimer = setTimeout(pollQrStatus, 2000);
+          } catch (e) {
+            qrBindModal.error = e.message;
+          } finally {
+            qrBindModal.generating = false;
+          }
+        };
+
         const tabs = computed(() => [
           { id: 'overview', label: '概览',     icon: ICON.overview, badge: null,
             title: '概览', subtitle: '当前 cwd 的 Prax 与 praxdaily 状态总览' },
@@ -1508,6 +1817,8 @@
             title: '定时任务', subtitle: '管理 .prax/cron.yaml — 到点自动跑 + 推到上面的渠道' },
           { id: 'runs',     label: '运行历史', icon: ICON.runs,     badge: runs.list.length || null,
             title: '运行历史', subtitle: '最近 30 条 cron run 日志，点行查看全文' },
+          { id: 'subscribers', label: '订阅者', icon: ICON.subscribers, badge: subsState.list.length || null,
+            title: '日报订阅者', subtitle: '所有活跃订阅 / 收发消息计数 / 强制退订 / iLink 长轮询状态' },
           { id: 'settings', label: '设置',     icon: ICON.settings, badge: envSettings.missingCount || null,
             title: '设置', subtitle: '配置 LLM API key — 写入 <cwd>/.prax/.env，cron 也会自动读' },
         ]);
@@ -2085,6 +2396,7 @@
             if (palette.open) { closePalette(); e.preventDefault(); return; }
             if (addWorkspaceModal.open) { addWorkspaceModal.open = false; e.preventDefault(); return; }
             if (loginModal.open) { closeLoginModal(); e.preventDefault(); return; }
+            if (qrBindModal.open) { closeQrModal(); e.preventDefault(); return; }
             if (viewedRun.value) { viewedRun.value = null; e.preventDefault(); return; }
           }
           // Cmd/Ctrl + K → command palette
@@ -2093,8 +2405,8 @@
             if (palette.open) closePalette(); else openPalette();
             return;
           }
-          // Cmd/Ctrl + 1..6 → switch tab
-          if ((e.metaKey || e.ctrlKey) && e.key >= '1' && e.key <= '6') {
+          // Cmd/Ctrl + 1..9 → switch tab
+          if ((e.metaKey || e.ctrlKey) && e.key >= '1' && e.key <= '9') {
             const idx = parseInt(e.key, 10) - 1;
             if (tabs.value[idx]) {
               activeTab.value = tabs.value[idx].id;
@@ -2110,7 +2422,13 @@
             fetchHealth(), fetchWorkspaces(), fetchWechatAccounts(),
             fetchChannels(), fetchSources(), fetchCron(), fetchRuns(),
             fetchEnvSettings(), fetchSchedule(), fetchLatestDigest(),
+            fetchSubs(),
           ]);
+          // Auto-refresh subscriber/puller stats every 10s while
+          // user is on the subscribers tab.
+          setInterval(() => {
+            if (activeTab.value === 'subscribers') fetchSubs();
+          }, 10000);
         });
 
         return {
@@ -2143,6 +2461,11 @@
           schedule, fetchSchedule, installSchedule, uninstallSchedule, cleanupLegacyPraxCron,
           latestDigest, fetchLatestDigest,
           fetchRuns, fetchRunsDebounced, runsFilter, openRun,
+          // QR binding (used by subscribers tab "邀请订阅")
+          qrBindContainer, qrBindModal,
+          openQrModal, closeQrModal, generateQr,
+          // subscribers
+          subsState, fetchSubs, expireSubscriber, syncPullers,
         };
       },
     }).mount('#app');

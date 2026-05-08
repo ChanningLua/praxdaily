@@ -13,7 +13,7 @@ deterministic — let it be deterministic.
 from __future__ import annotations
 
 from .types import Item
-from . import hn, bilibili
+from . import hn, bilibili, reddit, zhihu_daily, juejin, segmentfault
 
 
 # Source ID → scrape callable. Keep keys aligned with .prax/sources.yaml
@@ -21,6 +21,10 @@ from . import hn, bilibili
 SCRAPERS = {
     "hackernews": hn.scrape,
     "bilibili": bilibili.scrape,
+    "reddit": reddit.scrape,
+    "zhihu_daily": zhihu_daily.scrape,
+    "juejin": juejin.scrape,
+    "segmentfault": segmentfault.scrape,
 }
 
 

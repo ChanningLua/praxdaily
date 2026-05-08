@@ -1,0 +1,54 @@
+# praxdaily docker-compose deployment.
+#
+# Usage:
+#   docker compose up -d                     # start dashboard + cron-equivalent
+#   docker compose logs -f praxdaily         # tail logs
+#   docker compose exec praxdaily python3 -m praxdaily run-now --cwd /workspace
+#
+# Volumes:
+#   .prax data is bind-mounted from ./workspace on the host so SQLite
+#   bindings, vault digests, and notify config persist across restarts.
+
+services:
+  praxdaily:
+    build: .
+    image: praxdaily:local
+    container_name: praxdaily
+    restart: unless-stopped
+    ports:
+      - "7878:7878"
+    volumes:
+      - ./workspace:/workspace
+      # If you want to share existing iLink credentials with the
+      # container, mount them too. Uncomment one of:
+      # - ${HOME}/.prax/wechat:/root/.prax/wechat:ro
+    environment:
+      # Optional alert webhook (飞书/钉钉/企微 group bot URL).
+      # PRAXDAILY_ALERT_WEBHOOK: "https://open.feishu.cn/open-apis/bot/v2/hook/..."
+      TZ: Asia/Shanghai
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:7878/api/health', timeout=3)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ──────────────────────────────────────────────────────────────────
+  # Daily-trigger sidecar — runs `praxdaily run-now` on a cron-like
+  # schedule. Replaces the macOS LaunchAgent for Linux deploys.
+  # ──────────────────────────────────────────────────────────────────
+  scheduler:
+    image: alpine:3.19
+    container_name: praxdaily-scheduler
+    restart: unless-stopped
+    depends_on:
+      praxdaily:
+        condition: service_healthy
+    volumes:
+      - ./scripts/run-daily.sh:/run-daily.sh:ro
+    command: >
+      sh -c "
+      apk add --no-cache curl >/dev/null;
+      echo '0 14 * * * /run-daily.sh' | crontab -;
+      crond -f -L /dev/stdout
+      "

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -140,7 +140,7 @@ class LoginPollPayload(BaseModel):
 
 
 @router.post("/login/poll")
-async def login_poll(payload: LoginPollPayload) -> JSONResponse:
+async def login_poll(payload: LoginPollPayload, request: Request) -> JSONResponse:
     """Single-shot poll — client should call this every ~2 s until terminal.
 
     iLink statuses we relay verbatim:
@@ -208,6 +208,14 @@ async def login_poll(payload: LoginPollPayload) -> JSONResponse:
             base_url=confirmed_base_url,
             user_id=user_id,
         )
+        # Trigger puller sync so the new account gets a getupdates loop
+        # immediately — without this we'd wait until next app boot.
+        mgr = getattr(request.app.state, "puller_manager", None)
+        if mgr is not None:
+            try:
+                await mgr.sync_with_accounts()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("puller sync after login failed: %s", exc)
         # IMPORTANT: never leak the bot_token back to the browser.
         return JSONResponse(
             {
@@ -224,7 +232,7 @@ async def login_poll(payload: LoginPollPayload) -> JSONResponse:
 
 
 @router.delete("/accounts/{account_id}")
-async def delete_wechat_account(account_id: str) -> JSONResponse:
+async def delete_wechat_account(account_id: str, request: Request) -> JSONResponse:
     """Remove a saved iLink account credential file."""
     if "/" in account_id or "\\" in account_id or account_id.startswith(".."):
         raise HTTPException(status_code=400, detail="invalid account_id")
@@ -232,4 +240,11 @@ async def delete_wechat_account(account_id: str) -> JSONResponse:
     wx = _import_wechat_module()
     if not wx.delete_account(account_id):
         raise HTTPException(status_code=404, detail=f"account {account_id!r} not found")
+    # Stop the puller for this account.
+    mgr = getattr(request.app.state, "puller_manager", None)
+    if mgr is not None:
+        try:
+            await mgr.sync_with_accounts()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("puller sync after delete failed: %s", exc)
     return JSONResponse({"deleted": account_id})

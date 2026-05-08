@@ -107,10 +107,11 @@ _SOURCE_META = {
 }
 
 # How to render each source's raw `metric` into something a Chinese
-# reader scans easily. Keep the metric_label fallback for unknowns.
+# reader scans easily. Compact, no emoji clutter — WeChat bubbles look
+# busy fast.
 _METRIC_FORMATTERS = {
-    "score": lambda n: f"🔥 {n} 分",
-    "view":  lambda n: f"👁 {_human_count(n)} 播放",
+    "score": lambda n: f"{n} 分",
+    "view":  lambda n: f"{_human_count(n)} 播放",
 }
 
 
@@ -131,6 +132,16 @@ def _format_metric(metric_label: str, metric: int) -> str:
     return fn(metric) if fn else f"{metric_label} {metric:,}"
 
 
+def _format_short_date(date: str) -> str:
+    """2026-05-08 → '5 月 8 日' for WeChat-bubble friendliness."""
+    from datetime import datetime
+    try:
+        d = datetime.strptime(date, "%Y-%m-%d")
+        return f"{d.month} 月 {d.day} 日"
+    except ValueError:
+        return date
+
+
 def _render_markdown(date: str, by_source: dict[str, list[Item]]) -> str:
     """Render the full daily digest as a single string. Used for the
     on-disk archive (`daily-digest.md`); wechat sends are chunked
@@ -141,104 +152,136 @@ def _render_markdown(date: str, by_source: dict[str, list[Item]]) -> str:
 
 
 # Wechat (personal) silently truncates single text messages somewhere
-# around 2000 Chinese chars. Be conservative — a few items always look
-# better than a long message getting cut mid-sentence.
-WECHAT_CHUNK_BUDGET = 1500
+# around 2000 Chinese chars. We tested the boundary at 1800 — typical
+# 10-item digest fits in one bubble at this size, and we still have
+# ~200-char safety margin against the truncation.
+WECHAT_CHUNK_BUDGET = 1800
+
+
+def _render_item(idx: int, it: Item) -> list[str]:
+    """One item → 2 tight lines (title with score, URL flush left).
+
+    ``{idx}. {title} ({metric})``
+    ``{url}``
+
+    Why no author line: HN/B站 author identity isn't useful in a
+    digest scan-read context, and dropping it saves a line per item —
+    which matters a lot in WeChat's narrow bubble layout where every
+    extra newline doubles perceived space. Why URL flush-left (no
+    indent): indented URLs wrap mid-word on phones, making the bubble
+    look ragged. Flush-left keeps the wrap predictable.
+    """
+    title_line = f"{idx}. {it.title}"
+    m = _format_metric(it.metric_label, it.metric)
+    if m:
+        title_line += f" ({m})"
+    lines = [title_line]
+    if it.url:
+        lines.append(it.url)
+    return lines
 
 
 def _render_chunks(date: str, by_source: dict[str, list[Item]]) -> list[str]:
-    """Render the digest as a LIST of strings, each safely under
+    """Render the digest as a LIST of WeChat-ready chunks, each under
     ``WECHAT_CHUNK_BUDGET`` chars.
 
-    Layout per chunk:
-    - First chunk = header + first source (or empty-state notice)
-    - One source per chunk by default
-    - If a single source overflows the budget, split it further by
-      pivoting to a fresh chunk after the last item that fits.
-    - Last chunk gets the footer.
-
-    Why one source per chunk: it keeps each wechat message coherent
-    ("Here's HN today"), much friendlier than arbitrary mid-section
-    splits. The footer message gives the user a clear "end of report"
-    signal.
+    Layout philosophy: WeChat bubbles get noisy fast. We aim for **one
+    bubble** when content fits the budget, and split by source only when
+    it overflows. No `———————` separator chars (look gritty under
+    WeChat font), no separate header / footer / TOC bubbles, no
+    decorative emoji clutter on every line.
     """
-    total = sum(len(v) for v in by_source.values())
+    short_date = _format_short_date(date)
+    sections = [(sid, items) for sid, items in by_source.items() if items]
+    total = sum(len(items) for _, items in sections)
+
     if total == 0:
-        return [
-            f"📅 AI 日报 · {date}\n\n今天各源在筛选词下都没有命中。\n换组关键词或扩大抓取量再试。"
-        ]
+        return [f"📰 AI 日报 · {short_date}\n\n今日筛选无命中。"]
 
+    multi_source = len(sections) > 1
+
+    # Strategy: build the whole digest as one block first; if it fits the
+    # budget, ship one chunk. Otherwise split per-source.
+    one_block: list[str] = [f"📰 AI 日报 · {short_date} · {total} 条", ""]
+    for s_idx, (sid, items) in enumerate(sections):
+        meta = _SOURCE_META.get(sid, {"emoji": "🔗", "label": sid})
+        if multi_source:
+            if s_idx > 0:
+                one_block.append("")
+            one_block.append(f"【{meta['label']}】")
+        for i_idx, it in enumerate(items, 1):
+            if i_idx > 1:
+                one_block.append("")  # blank line between items for visual breathing room
+            one_block.extend(_render_item(i_idx, it))
+    rendered = "\n".join(one_block).rstrip()
+    if len(rendered) <= WECHAT_CHUNK_BUDGET:
+        return [rendered]
+
+    # Overflowing — split. First chunk carries the title; each subsequent
+    # chunk is one source (further split only when a single source is too
+    # large for one chunk on its own).
     chunks: list[str] = []
-    sections = list(by_source.items())
-
-    # Header chunk — title + table of contents (which sources, how many)
-    toc_lines = [f"📅 AI 日报 · {date}", "", f"今日 {total} 条："]
-    for sid, items in sections:
-        if not items:
-            continue
+    title = f"📰 AI 日报 · {short_date}"
+    for s_idx, (sid, items) in enumerate(sections):
         meta = _SOURCE_META.get(sid, {"emoji": "🔗", "label": sid})
-        toc_lines.append(f"  {meta['emoji']} {meta['label']} · {len(items)} 条")
-    toc_lines.append("")
-    toc_lines.append("👇 详细内容看下面几条")
-    chunks.append("\n".join(toc_lines))
-
-    # One section per chunk, splitting further if a section is too long.
-    for sid, items in sections:
-        if not items:
-            continue
-        meta = _SOURCE_META.get(sid, {"emoji": "🔗", "label": sid})
-        section_chunks = _split_section_by_budget(meta, items)
-        chunks.extend(section_chunks)
-
-    # Footer
-    chunks.append(f"——— 共 {total} 条 · praxdaily 自动生成 ———")
+        chunks.extend(_render_section_chunks(
+            title=title if s_idx == 0 else "",
+            label=meta["label"],
+            items=items,
+            multi_source=multi_source,
+        ))
     return chunks
 
 
-def _split_section_by_budget(meta: dict, items: list[Item]) -> list[str]:
-    """Pack as many items into a chunk as fit under the budget; spill
-    overflow into a continuation chunk with a `(续)` header so the
-    reader still knows it's the same source."""
+def _render_section_chunks(
+    *,
+    title: str,
+    label: str,
+    items: list[Item],
+    multi_source: bool,
+) -> list[str]:
+    """Render one source's items as one or more chunks. ``title`` (the
+    overall digest header) is included only on the first chunk of the
+    very first section."""
     budget = WECHAT_CHUNK_BUDGET
-    out_chunks: list[str] = []
-    cur_lines: list[str] = []
-    cur_chars = 0
-    cur_count = 0
-    part_num = 0
+    out: list[str] = []
+    head: list[str] = []
+    if title:
+        head.append(title)
+        head.append("")
+    if multi_source:
+        head.append(f"【{label}】")
 
-    def _flush(continuation: bool):
-        nonlocal cur_lines, cur_chars, cur_count, part_num
+    cur_lines: list[str] = list(head)
+    cur_chars = sum(len(l) + 1 for l in cur_lines)
+    overflowed = False
+
+    def _flush() -> None:
+        nonlocal cur_lines, cur_chars, overflowed
         if not cur_lines:
             return
-        part_num += 1
-        suffix = f"  (续 {part_num})" if continuation else ""
-        header = f"{meta['emoji']} {meta['label']}{suffix}\n———————\n"
-        out_chunks.append(header + "\n".join(cur_lines))
+        if overflowed and multi_source:
+            cur_lines.insert(0, f"【{label}】（续）")
+        out.append("\n".join(cur_lines).rstrip())
         cur_lines = []
         cur_chars = 0
-        cur_count = 0
+        overflowed = True
 
     for i, it in enumerate(items, 1):
-        block_lines = [f"{i}. {it.title}"]
-        sub_parts: list[str] = []
-        if it.author:
-            sub_parts.append(f"by {it.author}")
-        m = _format_metric(it.metric_label, it.metric)
-        if m:
-            sub_parts.append(m)
-        if sub_parts:
-            block_lines.append("   " + " · ".join(sub_parts))
-        block_lines.append(f"   🔗 {it.url}")
-        block = "\n".join(block_lines) + "\n"
+        block = _render_item(i, it)
+        # Prepend a blank-line separator between items (not before first).
+        if cur_lines and len(cur_lines) > len(head):
+            block = [""] + block
+        block_chars = sum(len(l) + 1 for l in block)
+        if cur_chars + block_chars > budget and len(cur_lines) > len(head):
+            _flush()
+            block = _render_item(i, it)  # no leading blank on chunk start
+            block_chars = sum(len(l) + 1 for l in block)
+        cur_lines.extend(block)
+        cur_chars += block_chars
 
-        if cur_chars + len(block) > budget and cur_lines:
-            _flush(continuation=part_num >= 1)
-        cur_lines.append(block)
-        cur_chars += len(block)
-        cur_count += 1
-
-    _flush(continuation=part_num >= 1)
-    return out_chunks
+    _flush()
+    return out
 
 
 def _resolve_channel(cwd) -> tuple[str, dict] | None:
@@ -348,16 +391,70 @@ async def run(*, cwd) -> PipelineResult:
     result.digest_path = str(digest_path)
     result.digest_chars = len(md)
 
-    # Push via configured notify channel
-    resolved = _resolve_channel(cwd)
-    if not resolved:
-        result.notify = {"sent": False, "error": "no notify channel resolvable from .prax/notify.yaml"}
+    # Push:
+    #
+    #  - If the bridge has any active subscribers (`bindings.list_active`),
+    #    broadcast the chunks to all of them — that's the production path
+    #    once friends start scanning the QR to subscribe.
+    #
+    #  - If no bridge subscribers, fall back to the legacy single-channel
+    #    notify.yaml path. Lets the existing solo-operator setup keep
+    #    working unchanged while bridge-driven multi-user rollout happens.
+    bridge_result = await _broadcast_via_bridge(cwd, chunks=chunks, date=date)
+    if bridge_result is not None and bridge_result["users_total"] > 0:
+        result.notify = bridge_result
     else:
-        ch_name, ch_cfg = resolved
-        result.notify = await _push_chunks(ch_name, ch_cfg, chunks=chunks)
+        resolved = _resolve_channel(cwd)
+        if not resolved:
+            result.notify = {
+                "sent": False,
+                "error": "no bridge subscribers and no notify channel in .prax/notify.yaml",
+            }
+        else:
+            ch_name, ch_cfg = resolved
+            result.notify = await _push_chunks(ch_name, ch_cfg, chunks=chunks)
 
     result.finished_at = datetime.now().isoformat(timespec="seconds")
     return result
+
+
+async def _broadcast_via_bridge(cwd, *, chunks: list[str], date: str) -> dict[str, Any] | None:
+    """If bridge has any active subscriber, broadcast and return the
+    result dict; otherwise return None so the caller falls back to
+    notify.yaml. Errors during the broadcast are caught and surfaced as
+    a result dict (not raised) so a single broken binding never hides
+    the whole digest.
+    """
+    try:
+        from . import bridge as bridge_pkg
+    except ImportError as exc:
+        logger.warning("bridge package not importable: %s", exc)
+        return None
+
+    try:
+        with bridge_pkg.connect(cwd) as conn:
+            active = bridge_pkg.bindings.list_active(conn)
+            if not active:
+                return None
+            # Idempotency prefix scoped to the date — re-running the same
+            # day's pipeline (e.g. retries) won't duplicate sent chunks.
+            idem_prefix = f"daily-digest:{date}"
+            summary = await bridge_pkg.broadcast.broadcast_chunks(
+                conn,
+                chunks=chunks,
+                idempotency_prefix=idem_prefix,
+                cwd=cwd,
+            )
+            summary["mode"] = "bridge_broadcast"
+            summary["date"] = date
+            return summary
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("bridge broadcast failed: %s", exc)
+        return {
+            "mode": "bridge_broadcast",
+            "users_total": 0,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
 
 
 def _classify_send_error(exc: Exception, channel_cfg: dict) -> dict[str, Any]:

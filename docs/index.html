@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>praxdaily — 本地 AI 日报 + 双向微信平台</title>
+  <meta name="description" content="本地起的网页面板，每天定时把 HackerNews AI 热门推到你的微信。多用户订阅、双向交互、零 SaaS 依赖。" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📰%3C/text%3E%3C/svg%3E" />
+
+  <style>
+    :root {
+      --bg: #0b0d12;
+      --bg-2: #0f1219;
+      --panel: rgba(20, 24, 35, 0.7);
+      --border: rgba(140, 180, 230, 0.15);
+      --ink: #f3f6ff;
+      --muted: #95a4c8;
+      --acc: #72a8ff;
+      --ok: #3dde9d;
+      --warn: #ffd26f;
+      --danger: #ff6d8d;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.65;
+    }
+    body {
+      background-image:
+        radial-gradient(1100px 700px at 80% -10%, rgba(114, 168, 255, 0.18), transparent 60%),
+        radial-gradient(900px 600px at -10% 100%, rgba(88, 239, 207, 0.10), transparent 60%);
+      background-attachment: fixed;
+    }
+    a { color: var(--acc); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: rgba(140, 180, 230, 0.12);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.92em;
+    }
+    pre {
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    pre code { background: none; padding: 0; }
+
+    .container {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 60px 24px 80px;
+    }
+
+    /* Header */
+    header.top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 60px;
+    }
+    .brand {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    nav.links a {
+      margin-left: 18px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    nav.links a:hover { color: var(--ink); }
+
+    /* Hero */
+    .hero h1 {
+      font-size: 44px;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin: 0 0 18px;
+      font-weight: 700;
+    }
+    .hero h1 .accent { color: var(--acc); }
+    .hero .lede {
+      font-size: 18px;
+      color: var(--muted);
+      max-width: 640px;
+      margin: 0 0 28px;
+    }
+    .hero .ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #6e9eff 0%, #4f7bff 100%);
+      color: #fff;
+      box-shadow: 0 8px 24px rgba(79, 123, 255, 0.30);
+    }
+    .btn-primary:hover { transform: translateY(-1px); text-decoration: none; }
+    .btn-ghost {
+      color: var(--ink);
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(140, 180, 230, 0.32);
+      text-decoration: none;
+    }
+
+    /* Sections */
+    section { margin-top: 80px; }
+    section h2 {
+      font-size: 26px;
+      letter-spacing: -0.01em;
+      margin: 0 0 18px;
+      font-weight: 600;
+    }
+    section p, section li {
+      color: var(--muted);
+      font-size: 15.5px;
+    }
+    section li { margin: 6px 0; }
+    section strong { color: var(--ink); font-weight: 500; }
+
+    /* Feature grid */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-top: 28px;
+    }
+    .feature {
+      padding: 22px 22px 24px;
+      background: var(--panel);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+    .feature h3 {
+      font-size: 15px;
+      margin: 0 0 8px;
+      letter-spacing: -0.01em;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .feature p {
+      font-size: 13.5px;
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    /* Diagrams */
+    .diagram-card {
+      background: #fff;  /* SVGs export with white bg assumption */
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      overflow: hidden;
+    }
+    .diagram-card img,
+    .diagram-card object {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .diagram-caption {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 10px;
+      text-align: center;
+    }
+
+    /* Stats / numbers row */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      margin-top: 28px;
+    }
+    .stat {
+      padding: 18px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      text-align: center;
+    }
+    .stat .v {
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--acc);
+    }
+    .stat .l {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    footer {
+      margin-top: 100px;
+      padding-top: 30px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .container { padding: 40px 18px 60px; }
+      .hero h1 { font-size: 34px; }
+      header.top { flex-direction: column; align-items: flex-start; gap: 14px; }
+      nav.links a:first-child { margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="top">
+      <div class="brand">📰 praxdaily</div>
+      <nav class="links">
+        <a href="#features">特性</a>
+        <a href="#architecture">架构</a>
+        <a href="#start">起步</a>
+        <a href="https://github.com/ChanningLua/praxdaily">GitHub →</a>
+      </nav>
+    </header>
+
+    <!-- Hero -->
+    <section class="hero" style="margin-top: 0;">
+      <h1>本地 AI 日报，<br/><span class="accent">推到你的微信</span>。</h1>
+      <p class="lede">
+        每天定时从 6 个内容源抓 AI 热门（HackerNews · 掘金 · SegmentFault · 知乎日报 ·
+        Reddit · B 站，全可独立开关），关键词过滤、渲染成简报，
+        通过 iLink 协议号一对多推送到所有订阅朋友的微信。朋友能回 <code>查 OpenAI</code>
+        / <code>今天</code> / <code>退订</code> 等命令双向交互。完全本地运行、零 SaaS 依赖。
+      </p>
+      <div class="ctas">
+        <a href="https://github.com/ChanningLua/praxdaily" class="btn btn-primary">
+          GitHub 源码
+        </a>
+        <a href="#start" class="btn btn-ghost">5 分钟起步</a>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="v">3 层</div><div class="l">协议 / 平台 / 应用</div></div>
+        <div class="stat"><div class="v">191</div><div class="l">单元测试</div></div>
+        <div class="stat"><div class="v">0</div><div class="l">LLM API 调用</div></div>
+        <div class="stat"><div class="v">~18s</div><div class="l">长轮询周期</div></div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features">
+      <h2>它做什么</h2>
+      <div class="features">
+        <div class="feature">
+          <h3>🔌 6 源覆盖中外</h3>
+          <p>HackerNews · 掘金 · SegmentFault · 知乎日报 · Reddit · B 站。全部 native HTTP scraper，零 LLM 抓取，新源 30 行 Python 接入。</p>
+        </div>
+        <div class="feature">
+          <h3>📡 多用户订阅</h3>
+          <p>朋友扫一个二维码就能加入。后台 SQLite 维护 binding 表，cron 一对多扇出。</p>
+        </div>
+        <div class="feature">
+          <h3>🔄 双向交互</h3>
+          <p>用户在微信回 <code>查 GPT</code> / <code>今天</code> / <code>帮助</code> / <code>退订</code>，系统应答。</p>
+        </div>
+        <div class="feature">
+          <h3>🛡 出站审核</h3>
+          <p>敏感词命中即整批 abort + 告警，避免单条触发风控连累全号。</p>
+        </div>
+        <div class="feature">
+          <h3>📊 仪表盘</h3>
+          <p>本地 web UI 看订阅者、puller 状态、收发计数、强制退订、邀请订阅。</p>
+        </div>
+        <div class="feature">
+          <h3>🔔 告警通道</h3>
+          <p>飞书/钉钉/企微 webhook 上报 puller 失败、send 失败、内容拦截事件。</p>
+        </div>
+        <div class="feature">
+          <h3>⏱ 速率限制</h3>
+          <p>用户级 6/min + 全局 5/s 令牌桶，避开 iLink 风控阈值。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Architecture -->
+    <section id="architecture">
+      <h2>怎么搭的</h2>
+      <p style="margin-bottom: 24px;">
+        三层结构：<strong>iLink 协议层</strong> ⇆ <strong>Bridge 平台层</strong>（用户绑定 / 出站 / 入站）⇆
+        <strong>应用层</strong>（日报为首发，未来其他业务复用同一底座）。
+      </p>
+
+      <div class="diagram-card">
+        <object data="diagrams/architecture-layers.svg" type="image/svg+xml" aria-label="架构分层图"></object>
+      </div>
+      <div class="diagram-caption">三层架构 — Apps / Bridge / 协议层</div>
+
+      <div class="diagram-card" style="margin-top: 32px;">
+        <object data="diagrams/daily-evolution.svg" type="image/svg+xml" aria-label="日报演进图"></object>
+      </div>
+      <div class="diagram-caption">日报演进 — 单用户单向 → 多用户订阅 + 双向交互</div>
+
+      <div class="diagram-card" style="margin-top: 32px;">
+        <object data="diagrams/ilink-flow.svg" type="image/svg+xml" aria-label="iLink 流程时序图"></object>
+      </div>
+      <div class="diagram-caption">订阅 / 推送 / 双向回复 时序</div>
+    </section>
+
+    <!-- Quick start -->
+    <section id="start">
+      <h2>5 分钟起步</h2>
+      <p>需要 Python 3.10+ 与 macOS 或 Linux。npm 包提供 <code>praxdaily</code> CLI。</p>
+
+      <pre><code># 1. 装 praxagent (iLink 客户端)
+npm install -g praxagent
+
+# 2. 装 praxdaily (npm 包)
+npm install -g praxdaily
+
+# 3. 进入工作目录，起本地面板
+cd ~/your-workspace
+praxdaily serve
+# → http://127.0.0.1:7878/
+
+# 4. 在面板里：
+#    a) 微信账号屏：扫码登录一个 iLink bot
+#    b) 通知渠道屏：新建 wechat_personal 渠道
+#    c) 抓取源屏：配置 sources.yaml（HN + 关键词）
+#    d) 订阅者屏：邀请朋友扫码订阅
+#    e) 装 LaunchAgent: praxdaily install-schedule --time 14:00
+</code></pre>
+
+      <p style="margin-top: 18px;">
+        进入「订阅者」屏点 <strong>+ 邀请订阅</strong> 生成扫码二维码 → 朋友用微信扫 →
+        自动落 binding。次日 14:00 LaunchAgent 触发，朋友收到日报。
+      </p>
+    </section>
+
+    <!-- Edge note -->
+    <section>
+      <h2>边界 + 风险</h2>
+      <ul>
+        <li>iLink 是<strong>非官方协议</strong>（reverse-engineered from Hermes-Agent）。商用合规需切公众号 + 多客服。</li>
+        <li>协议号被封是常态（平均 1-3 月一次）。本项目内置告警，但<strong>没有号池自动 failover</strong>。</li>
+        <li>不收集任何 SaaS 数据。所有 binding / messages 落本地 SQLite。</li>
+        <li>这是个<strong>展示 / 自用项目</strong>。详见 <a href="https://github.com/ChanningLua/praxdaily/blob/main/README.md">README</a>。</li>
+      </ul>
+    </section>
+
+    <footer>
+      <div>© praxdaily · MIT License</div>
+      <div>
+        <a href="https://github.com/ChanningLua/praxdaily">GitHub</a> ·
+        <a href="https://github.com/ChanningLua/praxdaily/issues">Issues</a> ·
+        <a href="https://github.com/ChanningLua/praxdaily/blob/main/CHANGELOG.md">Changelog</a>
+      </div>
+    </footer>
+
+  </div>
+</body>
+</html>

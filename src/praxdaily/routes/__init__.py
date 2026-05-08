@@ -5,6 +5,8 @@ mounts under ``/api``. Splitting them out keeps ``app.py`` skimmable
 and makes per-route tests obvious.
 """
 
+from .bridge import router as bridge_router
+from .bridge import webhook_router as wechat_webhook_router
 from .channels import router as channels_router
 from .cron import router as cron_router
 from .runs import router as runs_router
@@ -15,6 +17,8 @@ from .wechat import router as wechat_router
 from .workspaces import router as workspaces_router
 
 __all__ = [
+    "bridge_router",
+    "wechat_webhook_router",
     "channels_router",
     "cron_router",
     "runs_router",

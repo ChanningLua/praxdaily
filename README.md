@@ -1,11 +1,13 @@
 # praxdaily
 
 > Self-hosted AI 信息助理 —— 本地网页面板，每天定时把 HackerNews 的 AI
-> 热门拉到你自己的微信。完全本地运行，零 SaaS 依赖。
+> 热门拉到你自己的微信。多用户订阅 + 双向交互，完全本地运行，零 SaaS 依赖。
 
 [![npm version](https://img.shields.io/npm/v/praxdaily.svg)](https://www.npmjs.com/package/praxdaily)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+🌐 **[项目主页 + 架构图 →](https://channinglua.github.io/praxdaily/)**
 
 ---
 

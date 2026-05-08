@@ -67,9 +67,12 @@ def test_human_count_chinese_万_format():
     assert pipeline._human_count(1_234_567_890) == "12.3亿"
 
 
-def test_format_metric_uses_emoji_for_known_labels():
-    assert "🔥" in pipeline._format_metric("score", 100)
-    assert "👁" in pipeline._format_metric("view", 1_500)
+def test_format_metric_compact_no_emoji():
+    """Metric format is intentionally emoji-free now — WeChat bubbles
+    looked busy with 🔥 / 👁 on every item."""
+    assert pipeline._format_metric("score", 100) == "100 分"
+    assert pipeline._format_metric("view", 1_500) == "1,500 播放"
+    assert pipeline._format_metric("view", 25_000) == "2.5万 播放"
     assert pipeline._format_metric("score", 0) == ""        # zero metric → omit
     assert pipeline._format_metric("unknown", 50) == "unknown 50"  # fallback
 
@@ -86,48 +89,79 @@ def _items(source: str, n: int, base_score: int = 100) -> list[Item]:
     ]
 
 
-def test_render_chunks_one_section_per_chunk_plus_header_footer():
-    """Layout invariant: each source becomes one chunk; header is first,
-    footer is last."""
+def test_render_chunks_single_bubble_when_fits():
+    """Small digest → one chunk. No separate header / TOC / footer
+    bubbles — they're noise in WeChat conversation view."""
     chunks = pipeline._render_chunks("2026-04-27", {
         "hackernews": _items("hackernews", 3),
         "bilibili":   _items("bilibili", 2),
     })
-    assert len(chunks) == 4   # header + HN + 抖音 + footer
-    assert chunks[0].startswith("📅 AI 日报")
-    assert "HackerNews" in chunks[1]
-    assert "B 站热门" in chunks[2]
-    assert "praxdaily" in chunks[-1]
+    assert len(chunks) == 1
+    body = chunks[0]
+    assert body.startswith("📰 AI 日报 · 4 月 27 日 · 5 条")
+    assert "【HackerNews】" in body
+    assert "【B 站热门】" in body
+    # No decorative dividers or emoji clutter
+    assert "—" * 5 not in body
+    assert "🔥" not in body
+    assert "🔗" not in body
+    assert "👇" not in body
+    assert "praxdaily 自动生成" not in body  # no footer ceremony
 
 
 def test_render_chunks_empty_state_is_one_chunk():
     chunks = pipeline._render_chunks("2026-04-27", {})
     assert len(chunks) == 1
-    assert "今天各源在筛选词下都没有命中" in chunks[0]
+    assert "今日筛选无命中" in chunks[0]
 
 
-def test_render_chunks_splits_oversized_section(monkeypatch):
-    """If a single source exceeds the chunk budget, it must split into
-    multiple chunks with `(续 N)` headers — never silently truncate."""
+def test_render_chunks_splits_oversized_digest(monkeypatch):
+    """When the digest exceeds budget, split into multiple chunks but
+    never inject divider lines or footer chunks."""
     monkeypatch.setattr(pipeline, "WECHAT_CHUNK_BUDGET", 200)
     big = _items("hackernews", 8, base_score=999)
     chunks = pipeline._render_chunks("2026-04-27", {"hackernews": big})
-    # Header + multiple HN chunks + footer
-    assert len(chunks) >= 4
-    hn_chunks = [c for c in chunks if "HackerNews" in c]
-    assert len(hn_chunks) >= 2
-    assert any("续" in c for c in hn_chunks[1:])
+    assert len(chunks) >= 2
+    # Header carried only by the first chunk.
+    assert chunks[0].startswith("📰 AI 日报")
+    assert all(not c.startswith("📰 AI 日报") for c in chunks[1:])
+    # No `———————` separator anywhere.
+    assert all("—" * 5 not in c for c in chunks)
 
 
 def test_render_chunks_skip_disabled_source_with_no_items():
-    """A source with kept=0 shouldn't get a stray empty section in the
-    digest. Header TOC also shouldn't list it."""
+    """A source with kept=0 shouldn't get a stray empty section."""
     chunks = pipeline._render_chunks("2026-04-27", {
         "hackernews": _items("hackernews", 2),
         "bilibili": [],
     })
-    assert "B 站" not in chunks[0]   # not in TOC
-    assert all("B 站" not in c for c in chunks)  # no section either
+    assert all("B 站" not in c for c in chunks)
+
+
+def test_render_chunks_single_source_drops_label():
+    """When there's only one source, the section label is redundant
+    with the digest title — drop it for compactness."""
+    chunks = pipeline._render_chunks("2026-04-27", {
+        "hackernews": _items("hackernews", 2),
+    })
+    assert len(chunks) == 1
+    assert "【HackerNews】" not in chunks[0]
+    assert "1. " in chunks[0]  # items still numbered
+
+
+def test_render_item_compact_format():
+    """Single item layout: title-with-score on one line, URL flush left
+    on the next. Two lines total — author dropped for tightness."""
+    item = Item(
+        source="hackernews", id="1", title="Test article",
+        url="https://x.com/1", metric=42, metric_label="score",
+        author="alice",
+    )
+    lines = pipeline._render_item(1, item)
+    assert lines == [
+        "1. Test article (42 分)",
+        "https://x.com/1",
+    ]
 
 
 # ── Pipeline run end-to-end ────────────────────────────────────────────────
